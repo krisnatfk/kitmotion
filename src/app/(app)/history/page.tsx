@@ -1,0 +1,19 @@
+import Link from "next/link";
+import { Container } from "@/components/ui/container";
+import { Icon } from "@/components/ui/icons";
+import { listExercises } from "@/features/exercises/queries";
+import { listSessions } from "@/features/history/queries";
+
+export const dynamic = "force-dynamic";
+function formatDate(iso: string | null) { return iso ? new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "—"; }
+
+export default async function HistoryPage({ searchParams }: { searchParams: Promise<{ exercise?: string }> }) {
+  const params = await searchParams;
+  const [sessions, exercises] = await Promise.all([listSessions(params.exercise ? { exerciseSlug: params.exercise } : undefined), listExercises()]);
+  const average = sessions.length ? Math.round(sessions.reduce((sum, session) => sum + Number(session.final_score ?? 0), 0) / sessions.length) : 0;
+  return <Container className="py-xl tablet-narrow:py-section">
+    <header className="flex flex-col gap-lg tablet-narrow:flex-row tablet-narrow:items-end tablet-narrow:justify-between"><div><p className="eyebrow text-mute">Performance log</p><h1 className="mt-md font-display text-6xl uppercase leading-none tablet-narrow:text-8xl">Riwayat latihan</h1><p className="mt-md text-mute">Pantau konsistensi dan lihat bagian yang bisa ditingkatkan.</p></div><div className="flex gap-sm"><div className="rounded-sm bg-sport-black px-xl py-lg text-white"><p className="text-[10px] uppercase tracking-widest text-white/45">Total sesi</p><p className="mt-xs font-display text-3xl text-sport-lime">{sessions.length}</p></div><div className="rounded-sm bg-white px-xl py-lg"><p className="text-[10px] uppercase tracking-widest text-mute">Rata-rata</p><p className="mt-xs font-display text-3xl">{average || "—"}</p></div></div></header>
+    <nav className="mt-xl flex gap-sm overflow-x-auto pb-sm" aria-label="Filter latihan"><Link href="/history" className={`chip shrink-0 ${!params.exercise ? "chip-active" : ""}`}>Semua</Link>{exercises.map((exercise) => <Link key={exercise.slug} href={`/history?exercise=${exercise.slug}`} className={`chip shrink-0 ${params.exercise === exercise.slug ? "chip-active" : ""}`}>{exercise.name}</Link>)}</nav>
+    <div className="mt-lg overflow-hidden rounded-sm bg-white">{sessions.length === 0 && <div className="flex flex-col items-center px-xl py-section text-center"><span className="grid h-16 w-16 place-items-center rounded-full bg-soft-cloud"><Icon name="history" className="h-7 w-7 text-mute" /></span><h2 className="mt-lg font-semibold">Belum ada sesi</h2><p className="mt-sm max-w-sm text-sm text-mute">Mulai latihan pertamamu dan laporan performa akan muncul di sini.</p><Link href="/exercises" className="mt-lg font-semibold underline underline-offset-4">Pilih latihan</Link></div>}{sessions.map((session, index) => <Link key={session.id} href={`/history/${session.id}`} className="group grid grid-cols-[auto_1fr_auto] items-center gap-lg border-b border-hairline-soft p-lg last:border-0 hover:bg-soft-cloud tablet-narrow:p-xl"><span className="grid h-12 w-12 place-items-center rounded-full bg-sport-lime font-display text-xl">{String(index + 1).padStart(2, "0")}</span><div><p className="font-semibold">{session.exercises?.name ?? "Latihan"}</p><p className="mt-xs text-xs text-mute">{formatDate(session.completed_at)} · {session.valid_reps} repetisi valid · Grade {session.grade ?? "—"}</p></div><div className="flex items-center gap-lg"><div className="text-right"><p className="font-display text-3xl">{session.final_score != null ? Math.round(Number(session.final_score)) : "—"}</p><p className="text-[10px] uppercase tracking-widest text-mute">Skor</p></div><Icon name="arrow" className="hidden h-5 w-5 transition-transform group-hover:translate-x-1 tablet-narrow:block" /></div></Link>)}</div>
+  </Container>;
+}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="KITMOTION">
+  <rect width="512" height="512" fill="#111111" />
+  <g fill="#ffffff">
+    <rect x="160" y="120" width="32" height="120" rx="16" />
+    <rect x="320" y="120" width="32" height="120" rx="16" />
+    <rect x="240" y="232" width="32" height="120" rx="16" />
+    <rect x="160" y="360" width="192" height="32" rx="16" />
+  </g>
+</svg>

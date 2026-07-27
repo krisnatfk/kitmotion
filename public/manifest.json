@@ -1,0 +1,21 @@
+{
+  "name": "KITMOTION",
+  "short_name": "KITMOTION",
+  "description": "Latihan olahraga panduan visual, analisis pose via kamera, hitung repetisi, skor, dan gamifikasi.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#111111",
+  "lang": "id",
+  "categories": ["health", "fitness", "education"],
+  "icons": [
+    {
+      "src": "/brand/kitmotion-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
