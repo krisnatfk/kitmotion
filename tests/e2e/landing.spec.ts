@@ -27,6 +27,30 @@ test("landing page has no runtime or console errors", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("browser extension attributes are removed before hydration", async ({ page }) => {
+  const hydrationErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().toLowerCase().includes("hydrated")) {
+      hydrationErrors.push(message.text());
+    }
+  });
+
+  await page.route(/http:\/\/localhost:3000\/$/, async (route) => {
+    const response = await route.fetch();
+    const html = await response.text();
+    await route.fulfill({
+      response,
+      body: html.replaceAll("<div", '<div bis_skin_checked="1"'),
+    });
+  }, { times: 1 });
+
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.locator("[bis_skin_checked]")).toHaveCount(0);
+  expect(hydrationErrors).toEqual([]);
+});
+
 test("marketing nav links to privacy and register", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Navigasi utama").getByRole("link", { name: "Privasi" }).click();

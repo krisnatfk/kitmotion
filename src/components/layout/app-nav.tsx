@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
 import { Icon, type IconName } from "@/components/ui/icons";
+import { SignOutButton } from "@/features/auth/sign-out-button";
 import { ProfileAvatar } from "@/features/profile/avatar";
 
 const TABS: { href: string; label: string; icon: IconName }[] = [
@@ -22,6 +24,35 @@ function isActive(pathname: string, href: string) {
 
 export function AppNav({ avatarPath, displayName = "Pengguna KITMOTION" }: { avatarPath?: string | null; displayName?: string }) {
   const pathname = usePathname();
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => setAccountMenuOpen(false), [pathname]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setAccountMenuOpen(false);
+      accountTriggerRef.current?.focus();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [accountMenuOpen]);
+
   return (
     <>
       <header className="app-desktop-nav sticky top-0 z-40 border-b border-hairline-soft bg-white/95 backdrop-blur">
@@ -33,7 +64,54 @@ export function AppNav({ avatarPath, displayName = "Pengguna KITMOTION" }: { ava
               return <Link key={tab.href} href={tab.href} aria-current={active ? "page" : undefined} className={cn("flex min-h-11 items-center gap-sm rounded-full px-lg text-sm font-semibold transition-colors", active ? "bg-sport-black text-white" : "text-mute hover:bg-soft-cloud hover:text-ink")}><Icon name={tab.icon} className={cn("h-[18px] w-[18px]", active && "text-sport-lime")} />{tab.label}</Link>;
             })}
           </nav>
-          <Link href="/profile" className="rounded-full transition-transform hover:scale-105" aria-label="Buka profil" aria-current={isActive(pathname, "/profile") ? "page" : undefined}><ProfileAvatar avatarPath={avatarPath} displayName={displayName} className="h-11 w-11 text-lg" /></Link>
+          <div ref={accountMenuRef} className="relative">
+            <button
+              ref={accountTriggerRef}
+              type="button"
+              className={cn(
+                "grid h-12 w-12 place-items-center rounded-full transition-colors hover:bg-soft-cloud",
+                accountMenuOpen && "bg-soft-cloud",
+              )}
+              aria-label="Buka menu akun"
+              aria-haspopup="true"
+              aria-expanded={accountMenuOpen}
+              aria-controls="account-menu"
+              onClick={() => setAccountMenuOpen((open) => !open)}
+            >
+              <ProfileAvatar avatarPath={avatarPath} displayName={displayName} className="h-11 w-11 text-lg" />
+            </button>
+
+            {accountMenuOpen && (
+              <div
+                id="account-menu"
+                className="absolute right-0 top-[calc(100%+12px)] w-64 overflow-hidden rounded-sm border border-hairline-soft bg-white p-sm text-ink shadow-[0_18px_50px_rgba(0,0,0,0.14)]"
+                aria-label="Menu akun"
+              >
+                <div className="border-b border-hairline-soft px-md py-md">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-mute">Akun</p>
+                  <p className="mt-xs truncate text-sm font-semibold">{displayName}</p>
+                </div>
+                <div className="py-sm">
+                  <Link
+                    href="/profile"
+                    className="flex min-h-11 items-center gap-md rounded-md px-md text-sm font-semibold transition-colors hover:bg-soft-cloud"
+                    onClick={() => setAccountMenuOpen(false)}
+                  >
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-soft-cloud">
+                      <Icon name="user" className="h-4 w-4" />
+                    </span>
+                    Pengaturan profil
+                  </Link>
+                  <SignOutButton
+                    variant="ghost"
+                    containerClassName="mt-xs"
+                    className="w-full justify-start rounded-md px-md text-sm font-semibold text-danger hover:bg-red-50"
+                    onSignedOut={() => setAccountMenuOpen(false)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

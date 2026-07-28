@@ -2,10 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonVariant } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { logoutAction } from "./actions";
 
-export function SignOutButton() {
+export function SignOutButton({
+  variant = "secondary",
+  className,
+  containerClassName,
+  onSignedOut,
+}: {
+  variant?: ButtonVariant;
+  className?: string;
+  containerClassName?: string;
+  onSignedOut?: () => void;
+} = {}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +30,7 @@ export function SignOutButton() {
         return;
       }
       if (result.redirectTo) {
+        onSignedOut?.();
         router.push(result.redirectTo);
         router.refresh();
       }
@@ -26,9 +38,10 @@ export function SignOutButton() {
   }
 
   return (
-    <div>
+    <div className={containerClassName}>
       <Button
-        variant="secondary"
+        variant={variant}
+        className={cn(className)}
         onClick={handleSignOut}
         disabled={pending}
         aria-disabled={pending}

@@ -28,12 +28,12 @@ export function MarketingNav() {
             </Link>
           ))}
         </nav>
-        <div className="hidden items-center gap-sm tablet-narrow:flex">
-          <ButtonLink href="/login" variant="ghost" className="text-white hover:bg-white/10">
+        <div className="hidden items-center gap-md tablet-narrow:flex">
+          <ButtonLink href="/login" variant="ghost" className="px-sm text-sm font-semibold text-white hover:bg-white/10">
             Masuk
           </ButtonLink>
-          <ButtonLink href="/register" className="bg-sport-lime text-sport-black hover:bg-white">
-            Mulai gratis <Icon name="arrow" className="h-4 w-4" />
+          <ButtonLink href="/register" className="min-h-[42px] bg-sport-lime px-lg text-sm font-semibold text-sport-black hover:bg-white">
+            Mulai gratis <Icon name="arrow" className="h-3.5 w-3.5" />
           </ButtonLink>
         </div>
         <button
