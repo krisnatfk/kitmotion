@@ -1,11 +1,13 @@
 import { env } from "@/lib/env";
 import { AppNav } from "@/components/layout/app-nav";
 import { SetupNotice } from "@/components/layout/setup-notice";
+import { getCurrentProfile } from "@/features/profile/queries";
+import { withTimeoutFallback } from "@/lib/async";
 
 // All app routes are session-dependent (cookies) and must render on demand.
 export const dynamic = "force-dynamic";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -18,10 +20,12 @@ export default function AppLayout({
     );
   }
 
+  const profile = await withTimeoutFallback(getCurrentProfile(), null, 2_500);
+
   return (
     <div className="min-h-dvh bg-[#f7f8f5]">
-      <AppNav />
-      <main className="pb-24 desktop-small:pb-0">{children}</main>
+      <AppNav avatarPath={profile?.avatar_path} displayName={profile?.full_name} />
+      <main className="app-content">{children}</main>
     </div>
   );
 }

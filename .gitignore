@@ -5,6 +5,7 @@
 
 # next
 /.next/
+/.next-*/
 /out/
 /build/
 
@@ -20,6 +21,7 @@
 .DS_Store
 *.pem
 Thumbs.db
+/.kitmotion-dev.lock
 
 # debug
 npm-debug.log*
@@ -36,6 +38,7 @@ next-env.d.ts
 /test-results
 /blob-report
 /playwright/.cache
+/tmp/
 
 # supabase
 /supabase/.branches

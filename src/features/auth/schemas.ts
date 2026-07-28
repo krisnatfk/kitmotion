@@ -53,7 +53,15 @@ export const profileSchema = z.object({
     .max(50, "Kelas maksimal 50 karakter")
     .optional()
     .nullable(),
-  avatar_path: z.string().max(200).optional().nullable(),
+  avatar_path: z
+    .string()
+    .max(200)
+    .refine(
+      (value) => value === "" || ["preset:lime", "preset:blue", "preset:orange", "preset:violet"].includes(value) || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/avatar-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|png|webp)$/.test(value),
+      "Avatar tidak valid",
+    )
+    .optional()
+    .nullable(),
 });
 
 export type ProfileInput = z.infer<typeof profileSchema>;

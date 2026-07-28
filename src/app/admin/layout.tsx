@@ -25,7 +25,7 @@ export default async function AdminLayout({
     <div className="min-h-dvh">
       <header className="border-b border-white/10 bg-sport-black text-white">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between px-lg py-lg tablet-narrow:px-xl desktop-large:px-section">
-          <div className="flex items-center gap-md"><Logo href="/admin" className="text-white" /><span className="rounded-full bg-sport-lime px-md py-xs text-[10px] font-bold uppercase tracking-widest text-black">Admin</span></div>
+          <div className="flex items-center gap-md"><Logo href="/admin" tone="light" /><span className="rounded-full bg-sport-lime px-md py-xs text-[10px] font-bold uppercase tracking-widest text-black">Admin</span></div>
           <Link href="/dashboard" className="flex items-center gap-sm text-xs text-white/55 hover:text-sport-lime">
             <Icon name="arrow" className="h-4 w-4 rotate-180" /> <span className="hidden mobile-landscape:inline">Kembali ke aplikasi</span>
           </Link>

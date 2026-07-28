@@ -49,6 +49,34 @@
 }
 
 @layer components {
+  /* App navigation uses an explicit media query so it cannot regress when a
+     custom Tailwind breakpoint or a stale development stylesheet is loaded. */
+  .app-desktop-nav {
+    display: none;
+  }
+
+  .app-mobile-nav {
+    display: block;
+  }
+
+  .app-content {
+    padding-bottom: 6rem;
+  }
+
+  @media (min-width: 1024px) {
+    .app-desktop-nav {
+      display: block;
+    }
+
+    .app-mobile-nav {
+      display: none;
+    }
+
+    .app-content {
+      padding-bottom: 0;
+    }
+  }
+
   /* --- Buttons: pill geometry per design.md (rounded.lg = 30px) --- */
   .btn {
     @apply inline-flex items-center justify-center gap-sm rounded-lg font-sans text-button-md leading-none select-none whitespace-nowrap transition-all duration-200;

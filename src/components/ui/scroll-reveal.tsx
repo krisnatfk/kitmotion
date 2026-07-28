@@ -10,7 +10,9 @@ export function ScrollReveal({ children, className, delay = 0 }: { children: Rea
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    if (prefersReducedMotion || typeof IntersectionObserver === "undefined") {
       setVisible(true);
       return;
     }

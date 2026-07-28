@@ -1,32 +1,49 @@
-import Image from "next/image";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Container } from "@/components/ui/container";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { getCurrentProfile, getCurrentProgress, getDashboardGamification } from "@/features/profile/queries";
 import { listExercises } from "@/features/exercises/queries";
+import { withTimeoutFallback } from "@/lib/async";
+
+const EMPTY_GAMIFICATION = { badges: [], challenges: [] };
 
 export default async function DashboardPage() {
-  const profile = await getCurrentProfile();
-  if (!profile) redirect("/login?next=/dashboard");
-  const [progress, exercises, gamification] = await Promise.all([getCurrentProgress(), listExercises(), getDashboardGamification()]);
+  // Authentication is enforced by middleware. Optional dashboard data gets a
+  // deadline so one unavailable Supabase table cannot blank the entire route.
+  const [profile, progress, exercises, gamification] = await Promise.all([
+    withTimeoutFallback(getCurrentProfile(), null),
+    withTimeoutFallback(getCurrentProgress(), null),
+    withTimeoutFallback(listExercises(), []),
+    withTimeoutFallback(getDashboardGamification(), EMPTY_GAMIFICATION),
+  ]);
   const totalXp = progress?.total_xp ?? 0;
   const level = progress?.current_level ?? 1;
   const streak = progress?.current_streak ?? 0;
   const sessions = progress?.total_sessions ?? 0;
   const featured = exercises[0];
+  const databaseReady = Boolean(profile || progress || exercises.length > 0);
 
   return (
     <Container className="py-xl tablet-narrow:py-section">
       <header className="flex flex-col gap-md tablet-narrow:flex-row tablet-narrow:items-end tablet-narrow:justify-between">
-        <div><p className="text-sm font-medium text-mute">Selamat datang kembali,</p><h1 className="mt-xs font-display text-5xl uppercase leading-none tablet-narrow:text-6xl">{profile.full_name}</h1></div>
+        <div><p className="text-sm font-medium text-mute">Selamat datang kembali,</p><h1 className="mt-xs font-display text-5xl uppercase leading-none tablet-narrow:text-6xl">{profile?.full_name ?? "Atlet KITMOTION"}</h1></div>
         <p className="flex items-center gap-sm text-sm font-semibold"><span className="grid h-9 w-9 place-items-center rounded-full bg-sport-lime"><Icon name="bolt" className="h-4 w-4" /></span>{streak > 0 ? `${streak} hari beruntun` : "Mulai streak pertamamu"}</p>
       </header>
 
+      {!databaseReady && (
+        <section className="mt-xl flex items-start gap-md rounded-sm border border-[#f0c36a] bg-[#fff7df] p-lg" role="status">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-sport-black text-sport-lime"><Icon name="activity" className="h-5 w-5" /></span>
+          <div>
+            <h2 className="font-semibold">Database aplikasi belum terpasang</h2>
+            <p className="mt-xs text-sm leading-relaxed text-charcoal">Akun sudah terautentikasi, tetapi tabel latihan dan progres belum tersedia di project Supabase. Terapkan migration di folder <code className="rounded bg-black/5 px-xs py-xxs text-xs">supabase/migrations</code> agar katalog, kamera, riwayat, XP, badge, dan challenge aktif.</p>
+          </div>
+        </section>
+      )}
+
       <section className="mt-xl grid gap-lg desktop-small:grid-cols-[1.55fr_0.9fr]">
         <div className="relative min-h-[420px] overflow-hidden rounded-sm bg-sport-black text-white tablet-narrow:min-h-[470px]">
-          <Image src="/images/kitmotion-athlete-hero.png" alt="Atlet KITMOTION sedang berlatih" fill priority sizes="(min-width: 1024px) 62vw, 100vw" className="object-cover object-[68%_center] opacity-75" />
+          <div role="img" aria-label="Atlet KITMOTION sedang berlatih" className="absolute inset-0 bg-cover bg-[position:68%_center] opacity-75" style={{ backgroundImage: 'url("/images/kitmotion-athlete-hero.png")' }} />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-transparent" />
           <div className="relative z-10 flex h-full min-h-[420px] max-w-lg flex-col justify-between p-xl tablet-narrow:min-h-[470px] tablet-narrow:p-section">
             <p className="eyebrow text-sport-lime">Rekomendasi hari ini</p>
@@ -46,6 +63,12 @@ export default async function DashboardPage() {
           </div>
           <Link href="/history" className="mt-lg flex min-h-12 items-center justify-between border-t border-white/10 pt-lg text-sm font-semibold text-white/75 hover:text-sport-lime">Lihat laporan lengkap <Icon name="arrow" className="h-4 w-4" /></Link>
         </aside>
+      </section>
+
+      <section className="mt-lg grid gap-md tablet-narrow:grid-cols-3" aria-label="Akses cepat fitur">
+        <QuickAction href="/exercises" icon="camera" eyebrow="AI camera coach" title="Latihan dengan kamera" body="Pilih gerakan, aktifkan kamera, lalu dapatkan hitungan repetisi dan feedback secara real-time." />
+        <QuickAction href="/history" icon="history" eyebrow="Perkembangan" title="Buka riwayat latihan" body="Lihat skor, repetisi, durasi, feedback, dan tren dari setiap sesi yang sudah selesai." />
+        <QuickAction href="/profile" icon="user" eyebrow="Akun siswa" title="Lengkapi profil" body="Atur nama, sekolah, kelas, serta identitas yang tampil pada pengalaman latihanmu." />
       </section>
 
       <section className="mt-section">
@@ -81,4 +104,8 @@ export default async function DashboardPage() {
 
 function Stat({ label, value, icon }: { label: string; value: string; icon: "bolt" | "activity" | "history" | "target" }) {
   return <div className="rounded-sm border border-white/10 bg-white/[0.04] p-md"><Icon name={icon} className="h-4 w-4 text-sport-lime" /><p className="mt-lg text-[10px] uppercase tracking-widest text-white/40">{label}</p><p className="mt-xs font-display text-2xl">{value}</p></div>;
+}
+
+function QuickAction({ href, icon, eyebrow, title, body }: { href: string; icon: "camera" | "history" | "user"; eyebrow: string; title: string; body: string }) {
+  return <Link href={href} className="group flex min-h-48 flex-col rounded-sm border border-hairline-soft bg-white p-xl transition-transform duration-200 hover:-translate-y-1"><span className="grid h-11 w-11 place-items-center rounded-full bg-sport-lime"><Icon name={icon} className="h-5 w-5" /></span><p className="mt-lg text-[10px] font-bold uppercase tracking-widest text-mute">{eyebrow}</p><h2 className="mt-xs text-lg font-semibold">{title}</h2><p className="mt-sm text-xs leading-relaxed text-mute">{body}</p><span className="mt-auto flex items-center gap-sm pt-lg text-xs font-semibold">Buka fitur <Icon name="arrow" className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span></Link>;
 }

@@ -4,9 +4,12 @@
   "private": true,
   "description": "KITMOTION — application-first MVP. Camera-based pose exercise app (PWA). IoT-ready, not IoT-active.",
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:fresh": "node scripts/clean-next-cache.mjs --dev && node scripts/dev.mjs",
     "build": "next build",
     "start": "next start",
+    "clean": "node scripts/clean-next-cache.mjs --all",
+    "clean:dev": "node scripts/clean-next-cache.mjs --dev",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

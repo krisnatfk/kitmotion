@@ -31,15 +31,22 @@ Aplikasi pembelajaran olahraga berbasis web (PWA) untuk siswa SMA. Membaca pose 
    ```
    - `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` dari Project Settings > API.
    - `SUPABASE_SERVICE_ROLE_KEY` (server only — jangan terekspos ke client).
+   - AI coach opsional memakai `AI_PROVIDER`, `AI_API_KEY`, `AI_BASE_URL`, dan
+     `AI_MODEL`. Semuanya server only dan tidak memakai prefix `NEXT_PUBLIC_`.
    - Biarkan `NEXT_PUBLIC_IOT_INTEGRATION_ENABLED=false`.
 3. Terapkan database (migration + RLS + seed):
-   - **Cloud:** `supabase db push` (dengan `SUPABASE_ACCESS_TOKEN` / CLI login), atau jalankan ketiga file di `supabase/migrations/` lewat SQL editor Supabase.
+   - **Cloud:** `supabase db push` (dengan `SUPABASE_ACCESS_TOKEN` / CLI login), atau jalankan seluruh file di `supabase/migrations/` secara berurutan lewat SQL editor Supabase.
    - **Lokal:** `supabase start && supabase db push`. Lalu `npm run db:types` untuk regenerate `src/types/database.types.ts` dari DB lokal.
 4. Jalankan:
    ```bash
    npm run dev
    ```
    Buka http://localhost:3000.
+
+   Script ini memakai Turbopack dan menolak instance dev kedua agar cache tidak
+   ditulis dua proses sekaligus. Jika proses sebelumnya mati paksa atau cache
+   perlu dibuat ulang, jalankan `npm run dev:fresh`. Jangan menjalankan
+   `next dev`/`npx next dev` secara langsung karena melewati pengaman tersebut.
 
 ## Membuat akun admin
 
@@ -100,6 +107,7 @@ docs/iot-integration-contract.md
 Lihat [.env.example](.env.example). Inti:
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (server only)
+- `AI_PROVIDER`, `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` (server only, opsional)
 - `NEXT_PUBLIC_MEDIAPIPE_MODEL_PATH`, `NEXT_PUBLIC_MEDIAPIPE_WASM_PATH`
 - `NEXT_PUBLIC_IOT_INTEGRATION_ENABLED` — **harus `false`** untuk MVP ini.
 

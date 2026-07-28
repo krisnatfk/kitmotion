@@ -121,7 +121,7 @@ export async function applySessionRewards(
   if (upError) throw new Error(`Gagal memperbarui progres: ${upError.message}`);
 
   // 3. Badges: evaluate active badges against the new progress.
-  const newBadges = await awardBadges(supabase, input.userId, {
+  const badgeRewards = await awardBadges(supabase, input.userId, {
     totalSessions: newTotalSessions,
     totalValidReps: newTotalValidReps,
     longestStreak: newLongestStreak,
@@ -129,13 +129,33 @@ export async function applySessionRewards(
   });
 
   // 4. Challenges: update progress for matching challenges.
-  const challengesCompleted = await updateChallenges(supabase, input);
+  const challengeRewards = await updateChallenges(supabase, input);
+
+  // Badge and challenge rewards are separate idempotent XP events. Fold them
+  // back into the progress aggregate so the dashboard and level update now,
+  // not one workout later.
+  const bonusRewardXp = badgeRewards.xpAwarded + challengeRewards.xpAwarded;
+  const finalTotalXp = newTotalXp + bonusRewardXp;
+  const finalLevel = levelForXp(finalTotalXp, levelDefs);
+  if (bonusRewardXp > 0) {
+    const { error: rewardProgressError } = await supabase.from("user_progress").upsert({
+      user_id: input.userId,
+      total_xp: finalTotalXp,
+      current_level: finalLevel,
+      total_sessions: newTotalSessions,
+      total_valid_reps: newTotalValidReps,
+      current_streak: currentStreak,
+      longest_streak: newLongestStreak,
+      last_activity_date: today,
+    });
+    if (rewardProgressError) throw new Error(`Gagal menyinkronkan reward: ${rewardProgressError.message}`);
+  }
 
   return {
-    xpAwarded: alreadyRewarded ? 0 : xp.total,
-    newLevel,
-    newBadges,
-    challengesCompleted,
+    xpAwarded: (alreadyRewarded ? 0 : xp.total) + bonusRewardXp,
+    newLevel: finalLevel,
+    newBadges: badgeRewards.badges,
+    challengesCompleted: challengeRewards.challenges,
   };
 }
 
@@ -153,28 +173,47 @@ async function awardBadges(
   supabase: ServiceClient,
   userId: string,
   stats: { totalSessions: number; totalValidReps: number; longestStreak: number; maxScore: number },
-): Promise<{ code: string; name: string }[]> {
+): Promise<{ badges: { code: string; name: string }[]; xpAwarded: number }> {
+  const { data: existingRows } = await supabase
+    .from("user_badges")
+    .select("badge_id")
+    .eq("user_id", userId);
+  const existingBadgeIds = new Set((existingRows ?? []).map((row) => row.badge_id));
+
   const { data: badges } = await supabase
     .from("badges")
     .select("id, code, name, criteria, xp_reward")
     .eq("is_active", true);
 
-  if (!badges || badges.length === 0) return [];
+  if (!badges || badges.length === 0) return { badges: [], xpAwarded: 0 };
 
   const awarded: { code: string; name: string }[] = [];
+  let xpAwarded = 0;
   for (const badge of badges) {
     if (!meetsCriteria(badge.criteria, stats)) continue;
-    const { error } = await supabase.from("user_badges").upsert(
-      {
-        user_id: userId,
-        badge_id: badge.id,
-        awarded_for_id: null,
-      },
-      { onConflict: "user_id,badge_id", ignoreDuplicates: true },
-    );
-    if (!error) awarded.push({ code: badge.code, name: badge.name });
+    if (existingBadgeIds.has(badge.id)) continue;
+    const { error } = await supabase.from("user_badges").insert({
+      user_id: userId,
+      badge_id: badge.id,
+      awarded_for_id: null,
+    });
+    if (error) continue;
+
+    const badgeXp = badge.xp_reward ?? 0;
+    const { error: xpError } = await supabase.from("xp_events").insert({
+      user_id: userId,
+      source: "badge",
+      source_id: badge.id,
+      idempotency_key: `badge:${badge.id}`,
+      xp_amount: badgeXp,
+      description: `Badge diraih: ${badge.name}`,
+    });
+    const xpWasRecorded = !xpError;
+    awarded.push({ code: badge.code, name: badge.name });
+    existingBadgeIds.add(badge.id);
+    if (xpWasRecorded) xpAwarded += badgeXp;
   }
-  return awarded;
+  return { badges: awarded, xpAwarded };
 }
 
 type BadgeCriteria = { type?: string; target?: number };
@@ -198,7 +237,7 @@ function meetsCriteria(criteria: unknown, stats: { totalSessions: number; totalV
 async function updateChallenges(
   supabase: ServiceClient,
   input: SessionRewardInput,
-): Promise<{ code: string; title: string }[]> {
+): Promise<{ challenges: { code: string; title: string }[]; xpAwarded: number }> {
   const { data: challenges } = await supabase
     .from("challenges")
     .select("id, code, title, criteria, xp_reward")
@@ -206,9 +245,10 @@ async function updateChallenges(
     .lte("starts_at", input.completedAt)
     .gte("ends_at", input.completedAt);
 
-  if (!challenges || challenges.length === 0) return [];
+  if (!challenges || challenges.length === 0) return { challenges: [], xpAwarded: 0 };
 
   const completed: { code: string; title: string }[] = [];
+  let xpAwarded = 0;
   for (const ch of challenges) {
     const c = (ch.criteria ?? {}) as { type?: string; exercise_slug?: string; target?: number };
     if (c.type !== "session_reps") continue;
@@ -240,7 +280,7 @@ async function updateChallenges(
     if (error) continue;
 
     if (nowCompleted && !existing?.reward_claimed_at) {
-      await supabase.from("xp_events").insert({
+      const { error: rewardError } = await supabase.from("xp_events").insert({
         user_id: input.userId,
         source: "challenge",
         source_id: ch.id,
@@ -248,15 +288,19 @@ async function updateChallenges(
         xp_amount: ch.xp_reward ?? 0,
         description: `Challenge selesai: ${ch.title}`,
       });
-      await supabase
-        .from("challenge_progress")
-        .update({ reward_claimed_at: input.completedAt })
-        .eq("challenge_id", ch.id)
-        .eq("user_id", input.userId);
-      completed.push({ code: ch.code, title: ch.title });
+      const duplicateReward = !!rewardError && /duplicate|unique/i.test(rewardError.message);
+      if (!rewardError || duplicateReward) {
+        await supabase
+          .from("challenge_progress")
+          .update({ reward_claimed_at: input.completedAt })
+          .eq("challenge_id", ch.id)
+          .eq("user_id", input.userId);
+        completed.push({ code: ch.code, title: ch.title });
+        if (!duplicateReward) xpAwarded += ch.xp_reward ?? 0;
+      }
     }
   }
-  return completed;
+  return { challenges: completed, xpAwarded };
 }
 
 /** Previous calendar day (YYYY-MM-DD). Naive; sufficient for streak heuristics. */

@@ -15,6 +15,7 @@ function makeClient(opts: {
   progress?: Row | null;
   levels?: Row[];
   badges?: Row[];
+  userBadges?: Row[];
   challenges?: Row[];
   challengeProgress?: Row | null;
 }) {
@@ -31,6 +32,7 @@ function makeClient(opts: {
             return Promise.resolve({ data: null, error: opts.xpInsertError });
           }
           if (table === "xp_events") xpInserts.push(row as Row);
+          if (table === "user_badges") badgeUpserts.push(row as Row);
           return Promise.resolve({ data: null, error: null });
         },
         upsert: (row: unknown) => {
@@ -84,6 +86,7 @@ function makeClient(opts: {
   function listFor(table: string): Row[] {
     if (table === "level_definitions") return opts.levels ?? [];
     if (table === "badges") return opts.badges ?? [];
+    if (table === "user_badges") return opts.userBadges ?? [];
     if (table === "challenges") return opts.challenges ?? [];
     return [];
   }
@@ -162,6 +165,24 @@ describe("applySessionRewards idempotency", () => {
     const result = await applySessionRewards(c.client as never, baseInput);
     expect(result.newBadges).toEqual([{ code: "first-workout", name: "Latihan Pertama" }]);
     expect(c.badgeUpserts).toHaveLength(1);
+    expect(result.xpAwarded).toBe(71);
+    expect(c.xpInserts).toHaveLength(2);
+  });
+
+  it("does not report or reward an already-owned badge again", async () => {
+    const c = makeClient({
+      progress: progressZero,
+      levels: [{ level: 1, name: "Beginner", min_total_xp: 0 }],
+      badges: [
+        { id: "b1", code: "first-workout", name: "Latihan Pertama", criteria: { type: "total_sessions", target: 1 }, xp_reward: 20 },
+      ],
+      userBadges: [{ badge_id: "b1" }],
+      challenges: [],
+    });
+    const result = await applySessionRewards(c.client as never, baseInput);
+    expect(result.newBadges).toEqual([]);
+    expect(c.badgeUpserts).toHaveLength(0);
+    expect(c.xpInserts).toHaveLength(1);
   });
 
   it("throws on a non-idempotency XP insert error", async () => {

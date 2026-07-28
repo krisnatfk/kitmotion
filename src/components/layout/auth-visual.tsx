@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 export function AuthVisual() {
@@ -15,14 +14,7 @@ export function AuthVisual() {
 
   return (
     <aside className="relative hidden h-svh overflow-hidden bg-sport-black desktop-small:block">
-      <Image
-        src={image}
-        alt={alt}
-        fill
-        priority
-        sizes="55vw"
-        className={isRegister ? "object-cover object-[62%_center]" : "object-cover object-[68%_center]"}
-      />
+      <div role="img" aria-label={alt} className="absolute inset-0 bg-cover" style={{ backgroundImage: `url("${image}")`, backgroundPosition: isRegister ? "62% center" : "68% center" }} />
       <div className="absolute inset-0 bg-gradient-to-t from-sport-black via-sport-black/5 to-sport-black/10" />
       <div className="absolute inset-x-8 bottom-8 max-w-xl text-white desktop-large:inset-x-section desktop-large:bottom-section">
         <p className="eyebrow text-sport-lime">{isRegister ? "Start your movement" : "Train smarter"}</p>

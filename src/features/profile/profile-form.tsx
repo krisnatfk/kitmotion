@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,8 @@ import { FieldError, FormError, FormSuccess, Input, Label } from "@/components/u
 import { updateProfileAction } from "@/features/auth/actions";
 import { profileSchema, type ProfileInput } from "@/features/auth/schemas";
 import type { School } from "./queries";
+import { AvatarUploader } from "./avatar-uploader";
+import { broadcastProfileAvatarUpdated } from "./avatar";
 
 export function ProfileForm({
   defaultValues,
@@ -21,6 +24,7 @@ export function ProfileForm({
   };
   schools: School[];
 }) {
+  const router = useRouter();
   const [server, setServer] = useState<{ error?: string; message?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,6 +33,7 @@ export function ProfileForm({
     handleSubmit,
     formState: { errors },
     watch,
+    setValue,
   } = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -47,6 +52,12 @@ export function ProfileForm({
     const result = await updateProfileAction(values);
     setSubmitting(false);
     setServer(result);
+    if (result.avatarPath !== undefined) {
+      const nextAvatar = result.avatarPath || null;
+      setValue("avatar_path", result.avatarPath, { shouldDirty: false });
+      broadcastProfileAvatarUpdated(nextAvatar);
+      router.refresh();
+    }
   }
 
   return (
@@ -54,8 +65,10 @@ export function ProfileForm({
       {server?.error && <FormError>{server.error}</FormError>}
       {server?.message && <FormSuccess>{server.message}</FormSuccess>}
 
+      <AvatarUploader displayName={watch("full_name") || defaultValues.full_name} avatarPath={selectedAvatar || null} onUploaded={(avatarPath) => setValue("avatar_path", avatarPath, { shouldDirty: true })} />
+
       <fieldset>
-        <legend className="mb-sm text-caption-md text-charcoal">Gaya avatar</legend>
+        <legend className="mb-sm text-caption-md text-charcoal">Atau gunakan avatar warna</legend>
         <div className="flex flex-wrap gap-sm">
           {[
             { value: "", label: "Otomatis", color: "bg-soft-cloud" },

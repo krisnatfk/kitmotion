@@ -3,8 +3,28 @@ import { test, expect } from "@playwright/test";
 test("landing page renders hero and CTAs", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Gerak Lebih Baik/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Mulai Gratis/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Mulai latihan gratis/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Sudah punya akun/i })).toBeVisible();
+});
+
+test("landing page has no runtime or console errors", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+    const source = message.location().url;
+    errors.push(source ? `${message.text()} (${source})` : message.text());
+  });
+  page.on("response", (response) => {
+    if (response.status() >= 400) errors.push(`HTTP ${response.status()} ${response.url()}`);
+  });
+
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(page.getByRole("heading", { name: /Latihan lebih cerdas/i })).toBeVisible();
+
+  expect(errors).toEqual([]);
 });
 
 test("marketing nav links to privacy and register", async ({ page }) => {
@@ -45,4 +65,19 @@ test("mobile navigation opens without overflowing the viewport", async ({ page }
   await expect(page.getByLabel("Navigasi seluler")).toBeVisible();
   const width = await page.evaluate(() => ({ viewport: window.innerWidth, document: document.documentElement.scrollWidth }));
   expect(width.document).toBeLessThanOrEqual(width.viewport);
+});
+
+test("authentication pages have no runtime or console errors", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+  await page.goto("/register");
+  await page.waitForLoadState("networkidle");
+
+  expect(errors).toEqual([]);
 });

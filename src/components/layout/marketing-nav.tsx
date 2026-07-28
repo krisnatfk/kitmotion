@@ -20,7 +20,7 @@ export function MarketingNav() {
   return (
     <header className="fixed inset-x-0 top-0 z-[100] border-b border-white/10 bg-sport-black text-white">
       <Container className="flex h-[72px] items-center justify-between">
-        <Logo className="text-white" />
+        <Logo tone="light" />
         <nav className="hidden items-center gap-xxl text-sm font-semibold desktop-small:flex" aria-label="Navigasi utama">
           {LINKS.map((link) => (
             <Link key={link.href} href={link.href} className="transition-colors hover:text-sport-lime">
