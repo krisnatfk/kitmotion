@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { ButtonLink } from "@/components/ui/button";
@@ -43,7 +44,14 @@ export default async function DashboardPage() {
 
       <section className="mt-xl grid gap-lg desktop-small:grid-cols-[1.55fr_0.9fr]">
         <div className="relative min-h-[420px] overflow-hidden rounded-sm bg-sport-black text-white tablet-narrow:min-h-[470px]">
-          <div role="img" aria-label="Atlet KITMOTION sedang berlatih" className="absolute inset-0 bg-cover bg-[position:68%_center] opacity-75" style={{ backgroundImage: 'url("/images/kitmotion-athlete-hero.png")' }} />
+          <Image
+            src="/images/kitmotion-athlete-hero.webp"
+            alt="Atlet KITMOTION sedang berlatih"
+            fill
+            priority
+            sizes="(min-width: 1024px) 64vw, 100vw"
+            className="object-cover object-[68%_center] opacity-75"
+          />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-transparent" />
           <div className="relative z-10 flex h-full min-h-[420px] max-w-lg flex-col justify-between p-xl tablet-narrow:min-h-[470px] tablet-narrow:p-section">
             <p className="eyebrow text-sport-lime">Rekomendasi hari ini</p>

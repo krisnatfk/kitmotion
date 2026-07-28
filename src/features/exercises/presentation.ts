@@ -6,24 +6,24 @@ export type ExerciseVisual = {
 
 const EXERCISE_VISUALS: Record<string, ExerciseVisual> = {
   squat: {
-    src: "/images/exercises/squat-guide.png",
+    src: "/images/exercises/squat-guide.webp",
     alt: "Atlet memperagakan posisi squat yang benar",
     cue: "Tampak samping · pinggul ke belakang",
   },
   "jumping-jack": {
-    src: "/images/exercises/jumping-jack-guide.png",
+    src: "/images/exercises/jumping-jack-guide.webp",
     alt: "Atlet memperagakan posisi terbuka jumping jack",
     cue: "Tampak depan · tangan dan kaki terbuka",
   },
   "push-up": {
-    src: "/images/exercises/push-up-guide.png",
+    src: "/images/exercises/push-up-guide.webp",
     alt: "Atlet memperagakan posisi push-up yang benar",
     cue: "Tampak samping · tubuh tetap lurus",
   },
 };
 
 const FALLBACK_VISUAL: ExerciseVisual = {
-  src: "/images/kitmotion-athlete-hero.png",
+  src: "/images/kitmotion-athlete-hero.webp",
   alt: "Atlet memperagakan gerakan latihan",
   cue: "Ikuti contoh gerakan dengan kontrol",
 };

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { ButtonLink } from "@/components/ui/button";
@@ -20,7 +21,14 @@ export default function LandingPage() {
   return (
     <>
       <section id="top" className="relative isolate min-h-[calc(100svh-72px)] overflow-hidden bg-sport-black text-white">
-        <div role="img" aria-label="Atlet melakukan latihan lompat di studio olahraga" className="absolute inset-0 bg-cover bg-[position:68%_center] opacity-70 mobile-landscape:bg-center desktop-small:opacity-90" style={{ backgroundImage: 'url("/images/kitmotion-athlete-hero.png")' }} />
+        <Image
+          src="/images/kitmotion-athlete-hero.webp"
+          alt="Atlet melakukan latihan lompat di studio olahraga"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-[68%_center] opacity-70 mobile-landscape:object-center desktop-small:opacity-90"
+        />
         <div className="absolute inset-0 bg-gradient-to-r from-sport-black via-sport-black/85 to-sport-black/5" />
         <div className="absolute inset-0 bg-gradient-to-t from-sport-black via-transparent to-transparent" />
         <Container className="relative z-10 flex min-h-[calc(100svh-72px)] items-end py-section tablet-narrow:items-center tablet-narrow:py-section-lg">
@@ -115,7 +123,13 @@ export default function LandingPage() {
         <Container className="grid gap-section desktop-small:grid-cols-2 desktop-small:items-center">
           <div className="relative overflow-hidden rounded-sm bg-sport-black p-lg text-white tablet-narrow:p-xl">
             <div className="relative aspect-[4/3] overflow-hidden rounded-sm">
-              <div role="img" aria-label="Atlet perempuan berlatih dengan panduan KITMOTION" className="pointer-events-none absolute inset-0 bg-cover bg-[position:62%_center]" style={{ backgroundImage: 'url("/images/kitmotion-female-athlete-v2.png")' }} />
+              <Image
+                src="/images/kitmotion-female-athlete-v2.webp"
+                alt="Atlet perempuan berlatih dengan panduan KITMOTION"
+                fill
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                className="pointer-events-none object-cover object-[62%_center]"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
               <div className="absolute left-lg top-lg flex items-center gap-sm rounded-full bg-sport-black/80 px-md py-sm text-xs font-semibold backdrop-blur"><span className="h-2 w-2 animate-pulse rounded-full bg-sport-lime" /> POSE TERDETEKSI</div>
               <div className="absolute inset-x-lg bottom-lg grid grid-cols-3 gap-sm">

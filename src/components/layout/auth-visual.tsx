@@ -6,8 +6,8 @@ export function AuthVisual() {
   const pathname = usePathname();
   const isRegister = pathname === "/register";
   const image = isRegister
-    ? "/images/kitmotion-female-athlete-v2.png"
-    : "/images/kitmotion-athlete-hero.png";
+    ? "/images/kitmotion-female-athlete-v2.webp"
+    : "/images/kitmotion-athlete-hero.webp";
   const alt = isRegister
     ? "Atlet perempuan melakukan latihan lunge"
     : "Atlet melakukan latihan eksplosif";
