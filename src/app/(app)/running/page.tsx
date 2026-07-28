@@ -15,7 +15,7 @@ export default async function RunningPage() {
   return <Container className="py-xl tablet-narrow:py-section">
     <header className="flex flex-col gap-lg tablet-narrow:flex-row tablet-narrow:items-end tablet-narrow:justify-between">
       <div><p className="eyebrow text-mute">Outdoor activity</p><h1 className="mt-md font-display text-6xl uppercase leading-none tablet-narrow:text-8xl">Lari & rekam rute</h1><p className="mt-md max-w-2xl text-sm leading-relaxed text-mute">Pantau jarak, pace, durasi, dan rute secara langsung dengan GPS perangkatmu.</p></div>
-      <div className="grid grid-cols-2 gap-sm"><SummaryStat label="Total jarak" value={`${formatDistance(totalDistance)} km`} /><SummaryStat label="Waktu lari" value={formatDuration(totalSeconds)} /></div>
+      <div className="grid w-full grid-cols-2 gap-px overflow-hidden rounded-sm border border-hairline bg-hairline-soft tablet-narrow:w-auto" aria-label="Ringkasan seluruh aktivitas lari"><SummaryStat label="Total jarak" value={formatDistance(totalDistance)} unit="km" /><SummaryStat label="Waktu lari" value={formatDuration(totalSeconds)} /></div>
     </header>
 
     <div className="mt-xl"><RunTracker /></div>
@@ -27,6 +27,6 @@ export default async function RunningPage() {
   </Container>;
 }
 
-function SummaryStat({ label, value }: { label: string; value: string }) { return <div className="min-w-32 rounded-sm bg-sport-black px-lg py-md text-white"><p className="text-[9px] uppercase tracking-widest text-white/40">{label}</p><p className="mt-xs font-display text-2xl text-sport-lime">{value}</p></div>; }
+function SummaryStat({ label, value, unit }: { label: string; value: string; unit?: string }) { return <div className="min-w-0 bg-white p-lg text-sport-black tablet-narrow:min-w-36"><p className="text-[9px] font-bold uppercase tracking-widest text-mute">{label}</p><p className="mt-sm truncate font-display text-3xl leading-none">{value}<span className="ml-xs font-sans text-[9px] text-mute">{unit}</span></p></div>; }
 function MiniStat({ label, value }: { label: string; value: string }) { return <div><p className="text-[9px] uppercase tracking-widest text-mute">{label}</p><p className="mt-xs text-xs font-semibold">{value}</p></div>; }
 function formatRunDate(iso: string): string { return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)); }
