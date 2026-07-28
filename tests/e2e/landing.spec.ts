@@ -61,6 +61,77 @@ test("marketing nav links to privacy and register", async ({ page }) => {
   await expect(page).toHaveURL(/\/register/);
 });
 
+test("running showcase renders an animated stadium route without horizontal overflow", async ({ page }) => {
+  await page.goto("/#lari-gps");
+  const section = page.locator("#lari-gps");
+  await section.scrollIntoViewIfNeeded();
+
+  await expect(page.getByRole("img", { name: /lapangan atletik/i })).toBeVisible();
+  await expect(section.locator(".landing-track-route-animated")).toHaveCount(1);
+  await expect(section.locator(".landing-runner-marker animateMotion")).toHaveCount(1);
+  const animationTiming = await section.evaluate((element) => {
+    const line = element.querySelector(".landing-track-route-animated");
+    const lineAnimation = line?.querySelector("animate");
+    const runnerAnimation = element.querySelector(".landing-runner-animated animateMotion");
+    return {
+      linePath: line?.getAttribute("d"),
+      runnerPath: runnerAnimation?.getAttribute("path"),
+      lineDuration: lineAnimation?.getAttribute("dur"),
+      runnerDuration: runnerAnimation?.getAttribute("dur"),
+      lineBegin: lineAnimation?.getAttribute("begin"),
+      runnerBegin: runnerAnimation?.getAttribute("begin"),
+      lineCalculation: lineAnimation?.getAttribute("calcMode"),
+      runnerCalculation: runnerAnimation?.getAttribute("calcMode"),
+    };
+  });
+  expect(animationTiming.linePath).toBe(animationTiming.runnerPath);
+  expect(animationTiming.lineDuration).toBe(animationTiming.runnerDuration);
+  expect(animationTiming.lineBegin).toBe(animationTiming.runnerBegin);
+  expect(animationTiming.lineCalculation).toBe("linear");
+  expect(animationTiming.runnerCalculation).toBe("paced");
+  const width = await page.evaluate(() => ({ viewport: window.innerWidth, document: document.documentElement.scrollWidth }));
+  expect(width.document).toBeLessThanOrEqual(width.viewport);
+});
+
+test("running showcase keeps the full stadium visible at every responsive breakpoint", async ({ page }) => {
+  await page.goto("/#lari-gps");
+
+  for (const viewportWidth of [320, 360, 390, 430, 599, 600, 768, 1024, 1440]) {
+    await page.setViewportSize({ width: viewportWidth, height: 900 });
+    const preview = page.locator(".landing-running-preview");
+    const canvas = preview.locator(".landing-map-canvas");
+    const stadium = preview.locator(".landing-stadium");
+    const panel = preview.locator(".landing-activity-panel");
+    await preview.scrollIntoViewIfNeeded();
+
+    const [canvasBox, stadiumBox, panelBox] = await Promise.all([
+      canvas.boundingBox(),
+      stadium.boundingBox(),
+      panel.boundingBox(),
+    ]);
+    expect(canvasBox).not.toBeNull();
+    expect(stadiumBox).not.toBeNull();
+    expect(panelBox).not.toBeNull();
+
+    if (!canvasBox || !stadiumBox || !panelBox) continue;
+    expect(Math.abs(canvasBox.width / canvasBox.height - 4 / 3)).toBeLessThan(0.02);
+    expect(stadiumBox.x).toBeGreaterThanOrEqual(canvasBox.x - 1);
+    expect(stadiumBox.x + stadiumBox.width).toBeLessThanOrEqual(canvasBox.x + canvasBox.width + 1);
+    expect(stadiumBox.y).toBeGreaterThanOrEqual(canvasBox.y - 1);
+    expect(stadiumBox.y + stadiumBox.height).toBeLessThanOrEqual(canvasBox.y + canvasBox.height + 1);
+
+    if (viewportWidth < 600) {
+      expect(panelBox.y).toBeGreaterThanOrEqual(canvasBox.y + canvasBox.height - 1);
+    } else {
+      expect(panelBox.y).toBeGreaterThan(canvasBox.y);
+      expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(canvasBox.y + canvasBox.height + 1);
+    }
+
+    const width = await page.evaluate(() => ({ viewport: window.innerWidth, document: document.documentElement.scrollWidth }));
+    expect(width.document).toBeLessThanOrEqual(width.viewport);
+  }
+});
+
 test("register page shows the form fields", async ({ page }) => {
   await page.goto("/register");
   await expect(page.getByLabel(/Nama lengkap/i)).toBeVisible();

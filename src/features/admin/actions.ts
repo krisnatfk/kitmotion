@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getSupabaseServiceRole } from "@/lib/supabase/server";
-import type { Json } from "@/types/database.types";
+import type { Json, UserRole } from "@/types/database.types";
 import { requireAdminOrThrow } from "./guard";
 
-export type AdminResult = { error?: string; ok?: boolean };
+export type AdminResult = { error?: string; ok?: boolean; message?: string };
 
 async function audit(
   adminId: string,
@@ -260,4 +260,143 @@ export async function saveChallengeAction(
   await audit(admin.id, "challenge.create", "challenge", data.id, null, parsed.data);
   revalidatePath("/admin/challenges");
   return { ok: true };
+}
+
+// --- User management --------------------------------------------------------
+
+const managedUserSchema = z.object({
+  userId: z.string().uuid(),
+  fullName: z.string().trim().min(2, "Nama minimal 2 karakter.").max(80),
+  role: z.enum(["student", "admin"]),
+});
+
+const managedUserStatusSchema = z.object({
+  userId: z.string().uuid(),
+  blocked: z.boolean(),
+});
+
+const deleteManagedUserSchema = z.object({
+  userId: z.string().uuid(),
+  confirmation: z.literal("HAPUS"),
+});
+
+async function readManagedProfile(userId: string) {
+  const service = getSupabaseServiceRole();
+  const { data, error } = await service.from("profiles").select("*").eq("id", userId).single();
+  if (error || !data) throw new Error("Profil pengguna tidak ditemukan.");
+  return data;
+}
+
+async function ensureAdminWouldRemain(targetRole: UserRole) {
+  if (targetRole !== "admin") return;
+  const service = getSupabaseServiceRole();
+  const { count, error } = await service
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "admin");
+  if (error) throw new Error("Gagal memeriksa jumlah administrator.");
+  if ((count ?? 0) <= 1) throw new Error("Administrator terakhir tidak dapat dinonaktifkan atau dihapus.");
+}
+
+export async function updateManagedUserAction(
+  input: z.infer<typeof managedUserSchema>,
+): Promise<AdminResult> {
+  const parsed = managedUserSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  try {
+    const admin = await requireAdminOrThrow();
+    if (admin.id === parsed.data.userId) {
+      return { error: "Akun yang sedang digunakan tidak dapat diubah dari menu manajemen pengguna." };
+    }
+
+    const service = getSupabaseServiceRole();
+    const before = await readManagedProfile(parsed.data.userId);
+    if (before.role === "admin" && parsed.data.role !== "admin") await ensureAdminWouldRemain(before.role);
+
+    const patch = {
+      full_name: parsed.data.fullName,
+      role: parsed.data.role,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await service.from("profiles").update(patch).eq("id", parsed.data.userId);
+    if (error) return { error: `Gagal menyimpan pengguna: ${error.message}` };
+
+    await audit(admin.id, "user.update", "user", parsed.data.userId, before, {
+      full_name: parsed.data.fullName,
+      role: parsed.data.role,
+    });
+    revalidatePath("/admin");
+    revalidatePath("/admin/users");
+    return { ok: true, message: "Data pengguna berhasil diperbarui." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Gagal memperbarui pengguna." };
+  }
+}
+
+export async function setManagedUserBlockedAction(
+  input: z.infer<typeof managedUserStatusSchema>,
+): Promise<AdminResult> {
+  const parsed = managedUserStatusSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  try {
+    const admin = await requireAdminOrThrow();
+    if (admin.id === parsed.data.userId) return { error: "Anda tidak dapat memblokir akun yang sedang digunakan." };
+
+    const service = getSupabaseServiceRole();
+    const profile = await readManagedProfile(parsed.data.userId);
+    if (parsed.data.blocked && profile.role === "admin") await ensureAdminWouldRemain(profile.role);
+    const { data: authUser } = await service.auth.admin.getUserById(parsed.data.userId);
+    const wasBlocked = Boolean(authUser.user?.banned_until && new Date(authUser.user.banned_until).getTime() > Date.now());
+
+    const { error } = await service.auth.admin.updateUserById(parsed.data.userId, {
+      ban_duration: parsed.data.blocked ? "876000h" : "none",
+    });
+    if (error) return { error: `Gagal mengubah status akun: ${error.message}` };
+
+    await audit(admin.id, parsed.data.blocked ? "user.block" : "user.unblock", "user", parsed.data.userId, {
+      email: authUser.user?.email ?? null,
+      blocked: wasBlocked,
+    }, {
+      email: authUser.user?.email ?? null,
+      blocked: parsed.data.blocked,
+    });
+    revalidatePath("/admin");
+    revalidatePath("/admin/users");
+    return { ok: true, message: parsed.data.blocked ? "Pengguna berhasil diblokir." : "Akses pengguna berhasil dipulihkan." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Gagal mengubah status pengguna." };
+  }
+}
+
+export async function deleteManagedUserAction(
+  input: z.infer<typeof deleteManagedUserSchema>,
+): Promise<AdminResult> {
+  const parsed = deleteManagedUserSchema.safeParse(input);
+  if (!parsed.success) return { error: "Ketik HAPUS untuk mengonfirmasi penghapusan permanen." };
+
+  try {
+    const admin = await requireAdminOrThrow();
+    if (admin.id === parsed.data.userId) return { error: "Anda tidak dapat menghapus akun yang sedang digunakan." };
+
+    const service = getSupabaseServiceRole();
+    const profile = await readManagedProfile(parsed.data.userId);
+    if (profile.role === "admin") await ensureAdminWouldRemain(profile.role);
+    const { data: authUser } = await service.auth.admin.getUserById(parsed.data.userId);
+
+    const { error } = await service.auth.admin.deleteUser(parsed.data.userId);
+    if (error) return { error: `Gagal menghapus akun: ${error.message}` };
+
+    await audit(admin.id, "user.delete", "user", parsed.data.userId, {
+      email: authUser.user?.email ?? null,
+      full_name: profile.full_name,
+      role: profile.role,
+    }, null);
+    revalidatePath("/admin");
+    revalidatePath("/admin/users");
+    return { ok: true, message: "Akun dan seluruh data terkait berhasil dihapus." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Gagal menghapus pengguna." };
+  }
 }

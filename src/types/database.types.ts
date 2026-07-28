@@ -79,7 +79,9 @@ export interface Database {
         };
         Update: {
           id?: string;
-          // role intentionally omitted: column is not client-writable (RLS revoke).
+          // Runtime authorization is enforced by RLS/revoked grants. Server-side
+          // service-role actions still need the column represented accurately.
+          role?: UserRole;
           full_name?: string;
           school_id?: string | null;
           class_name?: string | null;

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Container } from "@/components/ui/container";
+import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { ProfileForm } from "@/features/profile/profile-form";
 import { SignOutButton } from "@/features/auth/sign-out-button";
@@ -16,6 +17,16 @@ export default async function ProfilePage() {
           <p className="eyebrow text-mute">Account settings</p>
           <h1 className="mt-md font-display text-6xl uppercase leading-none tablet-narrow:text-8xl">Profil</h1>
         </header>
+
+        {profile.role === "admin" && (
+          <section className="mt-xl flex flex-col gap-lg rounded-sm bg-sport-black p-xl text-white mobile-landscape:flex-row mobile-landscape:items-center mobile-landscape:justify-between">
+            <div className="flex items-start gap-md">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-sport-lime text-sport-black"><Icon name="shield" className="h-5 w-5" /></span>
+              <div><p className="text-[10px] font-bold uppercase tracking-widest text-sport-lime">Administrator</p><h2 className="mt-xs text-lg font-semibold">Akses pengelolaan sistem tersedia</h2><p className="mt-xs text-xs leading-relaxed text-white/55">Kelola konten latihan dan pantau aktivitas pengguna dari dashboard admin.</p></div>
+            </div>
+            <ButtonLink href="/admin" className="shrink-0 bg-sport-lime text-sport-black hover:bg-white">Buka Admin Panel <Icon name="arrow" className="h-4 w-4" /></ButtonLink>
+          </section>
+        )}
 
         <section className="mt-section overflow-hidden rounded-sm bg-white">
           <div className="p-xl tablet-narrow:p-section">

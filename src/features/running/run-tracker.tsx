@@ -46,7 +46,7 @@ export function RunTracker() {
   return (
     <section className="overflow-hidden rounded-sm bg-sport-black text-white">
       <div className="grid desktop-small:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
-        <div className="relative min-h-[300px] overflow-hidden tablet-narrow:min-h-[480px] desktop-small:min-h-[610px]">
+        <div className="relative isolate z-0 min-h-[300px] overflow-hidden tablet-narrow:min-h-[480px] desktop-small:min-h-[610px]">
           <RunMapClient points={tracker.points} follow={isMoving} />
           <div className="pointer-events-none absolute inset-x-md top-md z-[500] flex items-start justify-between gap-sm tablet-narrow:inset-x-lg tablet-narrow:top-lg">
             <span className="inline-flex items-center gap-sm rounded-full bg-sport-black/85 px-md py-sm text-[10px] font-bold uppercase tracking-widest backdrop-blur">
@@ -55,7 +55,7 @@ export function RunTracker() {
             </span>
             {tracker.accuracy != null && <span className={`rounded-full px-md py-sm text-[10px] font-bold backdrop-blur ${tracker.accuracy <= 20 ? "bg-sport-lime text-sport-black" : "bg-sport-black/85 text-white"}`}>GPS ±{Math.round(tracker.accuracy)} m</span>}
           </div>
-          {tracker.points.length === 0 && <div className="pointer-events-none absolute inset-0 z-[400] grid place-items-center bg-gradient-to-b from-sport-black/20 to-sport-black/70 p-xl text-center"><div className="max-w-sm"><span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-white/15 bg-sport-black/80"><Icon name="location" className="h-7 w-7 text-sport-lime" /></span><p className="mt-lg font-display text-3xl uppercase">Rute akan muncul di sini</p><p className="mt-sm text-xs leading-relaxed text-white/60">Gunakan di luar ruangan dan izinkan lokasi presisi untuk hasil terbaik.</p></div></div>}
+          {tracker.points.length === 0 && <div className="pointer-events-none absolute inset-0 z-[400] grid place-items-center bg-white/75 p-xl text-center backdrop-blur-[2px]"><div className="max-w-sm text-sport-black"><span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-sport-black"><Icon name="location" className="h-7 w-7 text-sport-lime" /></span><p className="mt-lg font-display text-3xl uppercase">Rute akan muncul di sini</p><p className="mt-sm text-xs leading-relaxed text-sport-black/60">Gunakan di luar ruangan dan izinkan lokasi presisi untuk hasil terbaik.</p></div></div>}
         </div>
 
         <aside className="flex min-h-full flex-col border-t border-white/10 p-xl desktop-small:border-l desktop-small:border-t-0 desktop-small:p-section">

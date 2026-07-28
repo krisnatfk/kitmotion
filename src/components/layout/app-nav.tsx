@@ -18,13 +18,27 @@ const TABS: { href: string; label: string; icon: IconName }[] = [
 ];
 
 const DESKTOP_TABS = TABS.filter((tab) => tab.href !== "/profile");
+const ADMIN_TAB: { href: string; label: string; icon: IconName } = {
+  href: "/admin",
+  label: "Admin",
+  icon: "shield",
+};
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppNav({ avatarPath, displayName = "Pengguna KITMOTION" }: { avatarPath?: string | null; displayName?: string }) {
+export function AppNav({
+  avatarPath,
+  displayName = "Pengguna KITMOTION",
+  isAdmin = false,
+}: {
+  avatarPath?: string | null;
+  displayName?: string;
+  isAdmin?: boolean;
+}) {
   const pathname = usePathname();
+  const desktopTabs = isAdmin ? [...DESKTOP_TABS, ADMIN_TAB] : DESKTOP_TABS;
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
@@ -56,11 +70,11 @@ export function AppNav({ avatarPath, displayName = "Pengguna KITMOTION" }: { ava
 
   return (
     <>
-      <header className="app-desktop-nav sticky top-0 z-40 border-b border-hairline-soft bg-white/95 backdrop-blur">
+      <header className="app-desktop-nav sticky top-0 z-[1000] border-b border-hairline-soft bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between px-section">
           <Logo href="/dashboard" />
           <nav className="flex items-center gap-sm" aria-label="Navigasi aplikasi">
-            {DESKTOP_TABS.map((tab) => {
+            {desktopTabs.map((tab) => {
               const active = isActive(pathname, tab.href);
               return <Link key={tab.href} href={tab.href} aria-current={active ? "page" : undefined} className={cn("flex min-h-11 items-center gap-sm rounded-full px-lg text-sm font-semibold transition-colors", active ? "bg-sport-black text-white" : "text-mute hover:bg-soft-cloud hover:text-ink")}><Icon name={tab.icon} className={cn("h-[18px] w-[18px]", active && "text-sport-lime")} />{tab.label}</Link>;
             })}
@@ -89,10 +103,25 @@ export function AppNav({ avatarPath, displayName = "Pengguna KITMOTION" }: { ava
                 aria-label="Menu akun"
               >
                 <div className="border-b border-hairline-soft px-md py-md">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-mute">Akun</p>
+                  <div className="flex items-center justify-between gap-sm">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-mute">Akun</p>
+                    {isAdmin && <span className="rounded-full bg-sport-lime px-sm py-xs text-[9px] font-bold uppercase tracking-wider text-sport-black">Admin</span>}
+                  </div>
                   <p className="mt-xs truncate text-sm font-semibold">{displayName}</p>
                 </div>
                 <div className="py-sm">
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      className="mb-xs flex min-h-11 items-center gap-md rounded-md bg-sport-black px-md text-sm font-semibold text-white transition-colors hover:bg-sport-charcoal"
+                      onClick={() => setAccountMenuOpen(false)}
+                    >
+                      <span className="grid h-8 w-8 place-items-center rounded-full bg-sport-lime text-sport-black">
+                        <Icon name="shield" className="h-4 w-4" />
+                      </span>
+                      Buka Admin Panel
+                    </Link>
+                  )}
                   <Link
                     href="/profile"
                     className="flex min-h-11 items-center gap-md rounded-md px-md text-sm font-semibold transition-colors hover:bg-soft-cloud"
@@ -116,7 +145,7 @@ export function AppNav({ avatarPath, displayName = "Pengguna KITMOTION" }: { ava
         </div>
       </header>
 
-      <nav className="app-mobile-nav safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-hairline-soft bg-white/95 backdrop-blur" aria-label="Navigasi aplikasi seluler">
+      <nav className="app-mobile-nav safe-bottom fixed inset-x-0 bottom-0 z-[1000] border-t border-hairline-soft bg-white/95 backdrop-blur" aria-label="Navigasi aplikasi seluler">
         <div className="mx-auto flex max-w-xl items-stretch justify-around">
           {TABS.map((tab) => {
             const active = isActive(pathname, tab.href);

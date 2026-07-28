@@ -28,4 +28,16 @@ describe("AppNav", () => {
     expect(screen.getByRole("button", { name: "Keluar" })).toBeInTheDocument();
     expect(screen.getAllByRole("img", { name: "Foto profil Krisna" })).toHaveLength(2);
   });
+
+  it("shows admin entry points only for an administrator", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<AppNav displayName="Siswa" />);
+    expect(screen.queryByRole("link", { name: /^Admin$/i })).not.toBeInTheDocument();
+
+    rerender(<AppNav displayName="Krisna" isAdmin />);
+    expect(screen.getByRole("link", { name: /^Admin$/i })).toHaveAttribute("href", "/admin");
+
+    await user.click(screen.getByRole("button", { name: "Buka menu akun" }));
+    expect(screen.getByRole("link", { name: "Buka Admin Panel" })).toHaveAttribute("href", "/admin");
+  });
 });

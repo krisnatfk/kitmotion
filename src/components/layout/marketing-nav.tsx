@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/icons";
 
 const LINKS = [
   { href: "/#fitur", label: "Fitur" },
+  { href: "/#lari-gps", label: "Lari GPS" },
   { href: "/#latihan", label: "Latihan" },
   { href: "/#cara-kerja", label: "Cara kerja" },
   { href: "/privacy", label: "Privasi" },

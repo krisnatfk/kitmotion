@@ -24,7 +24,11 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-dvh bg-[#f7f8f5]">
-      <AppNav avatarPath={profile?.avatar_path} displayName={profile?.full_name} />
+      <AppNav
+        avatarPath={profile?.avatar_path}
+        displayName={profile?.full_name}
+        isAdmin={profile?.role === "admin"}
+      />
       <main className="app-content">{children}</main>
     </div>
   );

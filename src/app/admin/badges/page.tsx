@@ -1,3 +1,4 @@
+import { Icon } from "@/components/ui/icons";
 import { requireAdmin } from "@/features/admin/guard";
 import { adminListBadges } from "@/features/admin/queries";
 import { AdminBadgeForm } from "@/features/admin/admin-badge-form";
@@ -7,38 +8,5 @@ export const dynamic = "force-dynamic";
 export default async function AdminBadgesPage() {
   await requireAdmin("/admin/badges");
   const badges = await adminListBadges();
-
-  return (
-    <div className="space-y-section">
-      <h1 className="text-heading-xl">Badge</h1>
-
-      <section>
-        <div className="divide-y divide-hairline border-t border-hairline">
-          {badges.map((b) => (
-            <div key={b.id} className="flex items-center justify-between py-md">
-              <div>
-                <p className="text-body-strong">
-                  {b.name}{" "}
-                  {!b.is_active && <span className="text-mute">(nonaktif)</span>}
-                </p>
-                <p className="text-caption-sm text-mute">
-                  {b.code} · +{b.xp_reward} XP · {JSON.stringify(b.criteria)}
-                </p>
-              </div>
-            </div>
-          ))}
-          {badges.length === 0 && (
-            <p className="py-lg text-body-md text-mute">Belum ada badge.</p>
-          )}
-        </div>
-      </section>
-
-      <section className="surface-cloud p-xl">
-        <h2 className="text-heading-md">Buat badge</h2>
-        <div className="mt-lg">
-          <AdminBadgeForm />
-        </div>
-      </section>
-    </div>
-  );
+  return <div className="space-y-xl"><header><p className="eyebrow text-sport-lime-deep">Reward system</p><h1 className="mt-md font-display text-5xl uppercase leading-none tablet-narrow:text-6xl">Badge &amp; pencapaian</h1><p className="mt-md max-w-2xl text-sm leading-relaxed text-mute">Bangun motivasi pengguna dengan penghargaan yang jelas dan XP yang seimbang.</p></header><div className="grid gap-md desktop:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)] desktop:items-start"><section className="overflow-hidden rounded-sm border border-black/[0.08] bg-white"><div className="flex items-center justify-between border-b border-black/[0.08] p-lg"><div><p className="font-semibold">Badge tersedia</p><p className="mt-xs text-xs text-mute">{badges.filter((badge) => badge.is_active).length} sedang aktif</p></div><span className="rounded-full bg-sport-lime px-md py-sm text-xs font-semibold">{badges.length}</span></div><div className="divide-y divide-black/[0.08]">{badges.map((badge) => <article key={badge.id} className="flex items-center gap-md p-lg"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-sport-black text-sport-lime"><Icon name="target" className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex items-center gap-sm"><p className="font-semibold">{badge.name}</p><span className={`h-2 w-2 rounded-full ${badge.is_active ? "bg-success-bright" : "bg-stone"}`} /></div><p className="mt-xs truncate text-xs text-mute">{badge.code} · +{badge.xp_reward} XP</p></div></article>)}{badges.length === 0 && <p className="p-xl text-center text-sm text-mute">Belum ada badge.</p>}</div></section><section className="rounded-sm border border-black/[0.08] bg-white p-lg tablet-narrow:p-xl"><div className="mb-xl flex items-center gap-md border-b border-black/[0.08] pb-lg"><span className="grid h-11 w-11 place-items-center rounded-full bg-sport-lime"><Icon name="target" className="h-5 w-5" /></span><div><p className="font-semibold">Buat badge baru</p><p className="mt-xs text-xs text-mute">Tentukan kriteria dan hadiah XP.</p></div></div><AdminBadgeForm /></section></div></div>;
 }

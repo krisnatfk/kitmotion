@@ -32,6 +32,24 @@ export default async function DashboardPage() {
         <p className="flex items-center gap-sm text-sm font-semibold"><span className="grid h-9 w-9 place-items-center rounded-full bg-sport-lime"><Icon name="bolt" className="h-4 w-4" /></span>{streak > 0 ? `${streak} hari beruntun` : "Mulai streak pertamamu"}</p>
       </header>
 
+      {profile?.role === "admin" && (
+        <section className="mt-xl flex flex-col gap-lg rounded-sm bg-sport-lime p-lg mobile-landscape:flex-row mobile-landscape:items-center mobile-landscape:justify-between tablet-narrow:p-xl" aria-label="Akses administrator">
+          <div className="flex items-start gap-md">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-sport-black text-sport-lime">
+              <Icon name="shield" className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Mode administrator aktif</p>
+              <h2 className="mt-xs text-lg font-bold">Kelola sistem KITMOTION</h2>
+              <p className="mt-xs max-w-2xl text-xs leading-relaxed text-black/60">Buka dashboard khusus untuk mengelola latihan, badge, challenge, serta memantau aktivitas seluruh pengguna.</p>
+            </div>
+          </div>
+          <ButtonLink href="/admin" className="shrink-0 bg-sport-black px-xl text-white hover:bg-sport-charcoal">
+            Buka Admin Panel <Icon name="arrow" className="h-4 w-4" />
+          </ButtonLink>
+        </section>
+      )}
+
       {!databaseReady && (
         <section className="mt-xl flex items-start gap-md rounded-sm border border-[#f0c36a] bg-[#fff7df] p-lg" role="status">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-sport-black text-sport-lime"><Icon name="activity" className="h-5 w-5" /></span>
