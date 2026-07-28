@@ -114,12 +114,19 @@ Lihat [.env.example](.env.example). Inti:
 ## Deployment (Vercel)
 
 1. Push repo ke GitHub.
-2. Import di Vercel, set env vars (sama seperti `.env`).
+2. Import di Vercel dan set env production. Jangan menyalin nilai localhost:
+   - `NEXT_PUBLIC_APP_URL=https://kitmotion.vercel.app`
+   - `NEXT_PUBLIC_APP_ENV=production`
+   - isi kredensial Supabase/AI lainnya sesuai environment production.
 3. Jalankan migration Supabase (`supabase db push` atau SQL editor).
-4. Di Supabase **Authentication > URL Configuration**, isi Site URL dengan URL production dan tambahkan `https://<domain>/auth/callback` ke Redirect URLs.
+4. Di Supabase **Authentication > URL Configuration**:
+   - Site URL: `https://kitmotion.vercel.app`
+   - Redirect URLs: `https://kitmotion.vercel.app/auth/callback`
 5. Di Supabase **Authentication > Emails > SMTP Settings**, aktifkan Custom SMTP. Email bawaan Supabase hanya untuk pengujian dan dibatasi sangat rendah, sehingga tidak cocok untuk pendaftaran publik.
 6. Setelah Custom SMTP aktif, sesuaikan kuota di **Authentication > Rate Limits** dengan kapasitas provider email.
 7. Deploy. PWA aktif di production (service worker hanya terdaftar saat `NODE_ENV=production`).
+
+Email verifikasi yang dibuat ketika Site URL masih localhost tidak dapat diperbaiki. Setelah konfigurasi di atas disimpan, kirim ulang verifikasi dari halaman daftar dan gunakan hanya link terbaru.
 
 ## Privasi
 

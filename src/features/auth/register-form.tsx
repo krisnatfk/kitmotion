@@ -16,7 +16,10 @@ export function RegisterForm() {
   const router = useRouter();
   const [server, setServer] = useState<RegisterResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
   const submittingRef = useRef(false);
+  const resendingRef = useRef(false);
 
   const {
     register,
@@ -50,6 +53,7 @@ export function RegisterForm() {
         return;
       }
       if (!data.session) {
+        setPendingEmail(values.email);
         setServer({ message: "Akun dibuat. Cek email untuk verifikasi sebelum masuk." });
         return;
       }
@@ -61,6 +65,33 @@ export function RegisterForm() {
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
+    }
+  }
+
+  async function resendVerification() {
+    if (!pendingEmail || resendingRef.current) return;
+    resendingRef.current = true;
+    setResending(true);
+    setServer(null);
+    try {
+      const supabase = getSupabaseBrowser();
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: pendingEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+        },
+      });
+      if (error) {
+        setServer({ error: translateAuthError(error.message, error.code, error.status) });
+        return;
+      }
+      setServer({ message: "Email verifikasi baru sudah dikirim. Gunakan link terbaru di kotak masuk." });
+    } catch {
+      setServer({ error: "Email verifikasi tidak dapat dikirim. Periksa koneksi lalu coba lagi." });
+    } finally {
+      resendingRef.current = false;
+      setResending(false);
     }
   }
 
@@ -109,6 +140,11 @@ export function RegisterForm() {
       <Button type="submit" disabled={submitting} className="w-full">
         {submitting ? "Membuat akun…" : "Daftar"}
       </Button>
+      {pendingEmail && (
+        <Button type="button" variant="secondary" disabled={resending} onClick={resendVerification} className="w-full">
+          {resending ? "Mengirim ulang…" : "Kirim ulang email verifikasi"}
+        </Button>
+      )}
     </form>
   );
 }
