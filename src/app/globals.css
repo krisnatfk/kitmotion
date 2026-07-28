@@ -204,12 +204,64 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes coach-alert {
+  0% { opacity: 0; transform: translateY(6px) scale(0.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes gps-pulse {
+  0%, 100% { stroke-opacity: 1; stroke-width: 4; }
+  50% { stroke-opacity: 0.35; stroke-width: 10; }
+}
+
+@keyframes route-draw {
+  from { stroke-dashoffset: 30; }
+  to { stroke-dashoffset: 0; }
+}
+
 .animate-auth-enter {
   animation: auth-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-hero-enter {
   animation: hero-enter 720ms 100ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-coach-alert {
+  animation: coach-alert 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.run-map {
+  background: #171916;
+  font-family: var(--font-inter);
+}
+
+.run-map .leaflet-tile-pane {
+  filter: grayscale(1) brightness(0.43) contrast(1.18) sepia(0.08) hue-rotate(35deg);
+}
+
+.run-map .leaflet-control-attribution {
+  border-radius: 8px 0 0 0;
+  background: rgba(10, 11, 10, 0.8);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 8px;
+  backdrop-filter: blur(8px);
+}
+
+.run-map .leaflet-control-attribution a {
+  color: #c8ff2e;
+}
+
+.run-route-line {
+  stroke-dasharray: 12 6;
+  animation: route-draw 1.2s linear infinite;
+  filter: drop-shadow(0 0 7px rgba(200, 255, 46, 0.5));
+}
+
+.run-current-marker {
+  animation: gps-pulse 1.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 .scroll-reveal {
@@ -227,7 +279,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .animate-auth-enter,
-  .animate-hero-enter {
+  .animate-hero-enter,
+  .animate-coach-alert,
+  .run-route-line,
+  .run-current-marker {
     animation: none;
   }
 

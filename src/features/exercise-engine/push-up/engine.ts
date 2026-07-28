@@ -90,7 +90,9 @@ export class PushUpEngine implements ExerciseEngine {
 
     const feedback: FrameFeedback[] = [];
     this.evaluateIssues(elbowAngle, hipDeviation, feedback);
+    const repetitionsBefore = this.repetitions.length;
     this.advance(elbowAngle, frame.timestampMs);
+    appendCompletedRepFeedback(this.repetitions, repetitionsBefore, feedback, PUSH_UP_FEEDBACK);
 
     return this.result(feedback, true);
   }
@@ -355,6 +357,21 @@ function push(
   codes.push(code);
   const meta = map[code];
   if (meta) feedback.push({ code, severity: meta.severity, message: meta.message });
+}
+
+function appendCompletedRepFeedback(
+  repetitions: RepRecord[],
+  previousLength: number,
+  feedback: FrameFeedback[],
+  map: Record<string, { severity: "info" | "warning" | "critical"; message: string }>,
+): void {
+  if (repetitions.length <= previousLength) return;
+  const completed = repetitions[repetitions.length - 1];
+  if (!completed || completed.isValid) return;
+  for (const code of completed.metrics.issueCodes) {
+    const meta = map[code];
+    if (meta && !feedback.some((item) => item.code === code)) feedback.push({ code, ...meta });
+  }
 }
 
 function avg(values: number[]): number {

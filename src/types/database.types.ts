@@ -20,7 +20,7 @@ export type UserRole = "student" | "admin";
 export type ExerciseDifficulty = "beginner" | "intermediate" | "advanced";
 export type WorkoutStatus = "created" | "active" | "completed" | "cancelled" | "failed";
 export type FeedbackSeverity = "info" | "warning" | "critical";
-export type RewardSource = "workout" | "challenge" | "badge" | "admin_adjustment";
+export type RewardSource = "workout" | "run" | "challenge" | "badge" | "admin_adjustment";
 export type ChallengePeriod = "daily" | "weekly" | "custom";
 export type SensorSource = "none" | "iot_necklace";
 
@@ -227,6 +227,47 @@ export interface Database {
           { foreignKeyName: "workout_sessions_exercise_id_fkey"; columns: ["exercise_id"]; referencedRelation: "exercises"; referencedColumns: ["id"] },
           { foreignKeyName: "workout_sessions_exercise_version_id_fkey"; columns: ["exercise_version_id"]; referencedRelation: "exercise_versions"; referencedColumns: ["id"] },
           { foreignKeyName: "workout_sessions_user_id_fkey"; columns: ["user_id"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
+
+      running_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          client_session_id: string;
+          status: WorkoutStatus;
+          started_at: string;
+          completed_at: string;
+          duration_seconds: number;
+          distance_meters: number;
+          average_pace_seconds_per_km: number | null;
+          best_pace_seconds_per_km: number | null;
+          elevation_gain_meters: number;
+          calories_estimate: number;
+          route: Json;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          client_session_id: string;
+          status?: WorkoutStatus;
+          started_at: string;
+          completed_at: string;
+          duration_seconds: number;
+          distance_meters: number;
+          average_pace_seconds_per_km?: number | null;
+          best_pace_seconds_per_km?: number | null;
+          elevation_gain_meters?: number;
+          calories_estimate?: number;
+          route?: Json;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["running_sessions"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "running_sessions_user_id_fkey"; columns: ["user_id"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ];
       };
 

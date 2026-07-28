@@ -4,18 +4,23 @@ import {
   adminListBadges,
   adminListChallenges,
   adminListExercises,
+  adminActivityCounts,
+  adminListRuns,
   adminListSessions,
 } from "@/features/admin/queries";
+import { formatDistance, formatDuration, formatPace } from "@/features/running/metrics";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
   const admin = await requireAdmin("/admin");
-  const [exercises, badges, challenges, sessions] = await Promise.all([
+  const [exercises, badges, challenges, sessions, runs, counts] = await Promise.all([
     adminListExercises(),
     adminListBadges(),
     adminListChallenges(),
     adminListSessions(5),
+    adminListRuns(5),
+    adminActivityCounts(),
   ]);
 
   return (
@@ -29,7 +34,15 @@ export default async function AdminDashboardPage() {
         <Stat label="Latihan" value={String(exercises.length)} href="/admin/exercises" />
         <Stat label="Badge" value={String(badges.length)} href="/admin/badges" />
         <Stat label="Challenge" value={String(challenges.length)} href="/admin/challenges" />
-        <Stat label="Sesi" value="—" href="/admin/sessions" />
+        <Stat label="Sesi latihan" value={String(counts.workouts)} href="/admin/sessions" />
+      </section>
+
+      <section>
+        <div className="flex items-end justify-between gap-md"><div><p className="text-caption-sm text-mute">GPS activity</p><h2 className="text-heading-md">Lari terbaru</h2></div><span className="chip">{counts.runs} total</span></div>
+        <div className="mt-lg divide-y divide-hairline border-t border-hairline">
+          {runs.length === 0 && <p className="py-lg text-body-md text-mute">Belum ada aktivitas lari.</p>}
+          {runs.map((run) => <div key={run.id} className="grid grid-cols-[1fr_auto] items-center gap-lg py-md"><div><p className="text-body-strong">{run.profiles?.full_name ?? "—"} · {formatDistance(Number(run.distance_meters))} km</p><p className="text-caption-sm text-mute">{new Date(run.completed_at).toLocaleString("id-ID")} · {formatDuration(run.duration_seconds)}</p></div><p className="text-right text-caption-sm font-semibold">{formatPace(run.average_pace_seconds_per_km)} /km</p></div>)}
+        </div>
       </section>
 
       <section>

@@ -7,12 +7,15 @@ import type { NormalizedLandmark, PoseFrame } from "@/features/exercise-engine/c
  * of `{ x, y, z, visibility? }` already normalized to [0,1] image coordinates.
  * We take the first pose and fill missing visibility with 0.
  *
- * x is mirrored for a selfie-style front camera so left/right match the user.
+ * Coordinates stay in the camera source space. Mirroring belongs to the
+ * presentation layer because the exercise engine must keep MediaPipe's real
+ * left/right landmark identity, while the overlay mirrors exactly once to
+ * match the selfie video.
  */
 export function toPoseFrame(
   mpLandmarks: { x: number; y: number; z: number; visibility?: number }[] | undefined,
   timestampMs: number,
-  mirror = true,
+  mirror = false,
 ): PoseFrame {
   if (!mpLandmarks || mpLandmarks.length === 0) {
     return { landmarks: [], timestampMs };

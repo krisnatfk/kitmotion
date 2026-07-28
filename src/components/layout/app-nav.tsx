@@ -12,6 +12,7 @@ import { ProfileAvatar } from "@/features/profile/avatar";
 const TABS: { href: string; label: string; icon: IconName }[] = [
   { href: "/dashboard", label: "Beranda", icon: "home" },
   { href: "/exercises", label: "Latihan", icon: "activity" },
+  { href: "/running", label: "Lari", icon: "route" },
   { href: "/history", label: "Riwayat", icon: "history" },
   { href: "/profile", label: "Profil", icon: "user" },
 ];

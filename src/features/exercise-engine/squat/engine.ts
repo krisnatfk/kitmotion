@@ -97,7 +97,9 @@ export class SquatEngine implements ExerciseEngine {
     const issueCodes = this.evaluateIssues(kneeAngle, lean, cavein, feedback);
 
     // Advance the state machine with debounce.
+    const repetitionsBefore = this.repetitions.length;
     this.advance(kneeAngle, frame.timestampMs);
+    appendCompletedRepFeedback(this.repetitions, repetitionsBefore, feedback, SQUAT_FEEDBACK);
 
     // If a rep just completed, fold its issues into the rep record.
     if (this.currentRep === null && this.phase === SquatPhase.READY) {
@@ -394,6 +396,21 @@ function push(
   codes.push(code);
   const meta = map[code];
   if (meta) feedback.push({ code, severity: meta.severity, message: meta.message });
+}
+
+function appendCompletedRepFeedback(
+  repetitions: RepRecord[],
+  previousLength: number,
+  feedback: FrameFeedback[],
+  map: Record<string, { severity: "info" | "warning" | "critical"; message: string }>,
+): void {
+  if (repetitions.length <= previousLength) return;
+  const completed = repetitions[repetitions.length - 1];
+  if (!completed || completed.isValid) return;
+  for (const code of completed.metrics.issueCodes) {
+    const meta = map[code];
+    if (meta && !feedback.some((item) => item.code === code)) feedback.push({ code, ...meta });
+  }
 }
 
 function avg(values: number[]): number {

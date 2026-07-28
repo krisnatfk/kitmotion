@@ -25,10 +25,12 @@
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.45.0",
     "clsx": "^2.1.1",
+    "leaflet": "^1.9.4",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.2",
+    "react-leaflet": "^5.0.0",
     "tailwind-merge": "^2.5.5",
     "zod": "^3.23.8"
   },
@@ -37,6 +39,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
@@ -49,6 +52,11 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
+  },
+  "overrides": {
+    "next": {
+      "sharp": "0.35.3"
+    }
   },
   "engines": {
     "node": ">=18.18"

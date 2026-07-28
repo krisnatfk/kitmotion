@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import { RegisterSW } from "@/components/pwa/register-sw";
 
 const APP_NAME = "KITMOTION";
 const APP_DESCRIPTION =
-  "Latihan olahraga panduan visual, analisis pose via kamera, hitung repetisi, skor, dan gamifikasi untuk siswa SMA.";
+  "Latihan olahraga dengan analisis pose, koreksi teknik real-time, serta pelacak lari GPS dan peta rute untuk siswa SMA.";
 
 /**
  * Bitdefender's browser extension adds `bis_skin_checked` to arbitrary DOM

@@ -43,9 +43,9 @@ describe("checkReadiness", () => {
 });
 
 describe("toPoseFrame", () => {
-  it("mirrors x by default (selfie view)", () => {
+  it("keeps camera coordinates so the overlay can mirror exactly once", () => {
     const frame = toPoseFrame([{ x: 0.2, y: 0.3, z: 0, visibility: 0.9 }], 1000);
-    expect(frame.landmarks[0]?.x).toBeCloseTo(0.8, 5);
+    expect(frame.landmarks[0]?.x).toBeCloseTo(0.2, 5);
     expect(frame.landmarks[0]?.visibility).toBe(0.9);
     expect(frame.timestampMs).toBe(1000);
   });

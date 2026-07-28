@@ -1,7 +1,7 @@
 {
   "name": "KITMOTION",
   "short_name": "KITMOTION",
-  "description": "Latihan olahraga panduan visual, analisis pose via kamera, hitung repetisi, skor, dan gamifikasi.",
+  "description": "Latihan olahraga dengan analisis pose, feedback teknik real-time, serta pelacak lari GPS dan peta rute.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
@@ -10,6 +10,18 @@
   "theme_color": "#111111",
   "lang": "id",
   "categories": ["health", "fitness", "education"],
+  "shortcuts": [
+    {
+      "name": "Mulai latihan",
+      "short_name": "Latihan",
+      "url": "/exercises"
+    },
+    {
+      "name": "Rekam lari",
+      "short_name": "Lari",
+      "url": "/running"
+    }
+  ],
   "icons": [
     {
       "src": "/brand/kitmotion-icon-512.png",

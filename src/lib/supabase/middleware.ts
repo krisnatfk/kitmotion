@@ -5,7 +5,7 @@ import type { Database } from "@/types/database.types";
 
 type SupabaseCookie = { name: string; value: string; options: CookieOptions };
 
-const PROTECTED_ROOTS = ["/dashboard", "/exercises", "/workout", "/history", "/profile"];
+const PROTECTED_ROOTS = ["/dashboard", "/exercises", "/workout", "/running", "/history", "/profile"];
 const ADMIN_ROOT = "/admin";
 const AUTH_ROOTS = ["/login", "/register", "/forgot-password"];
 

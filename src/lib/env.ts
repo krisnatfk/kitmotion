@@ -28,6 +28,10 @@ export const env = {
     read(process.env.NEXT_PUBLIC_MEDIAPIPE_WASM_PATH) ||
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm",
 
+  mapTileUrl:
+    read(process.env.NEXT_PUBLIC_MAP_TILE_URL) ||
+    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+
   /** IoT feature flag. MUST stay false for the application-first MVP. */
   iotIntegrationEnabled: read(process.env.NEXT_PUBLIC_IOT_INTEGRATION_ENABLED) === "true",
 

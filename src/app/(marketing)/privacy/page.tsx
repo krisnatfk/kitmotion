@@ -25,6 +25,13 @@ export default function PrivacyPage() {
           kalung belum diaktifkan.
         </p>
         <p>
+          Fitur lari meminta izin lokasi hanya setelah kamu menekan tombol mulai.
+          Saat aktivitas disimpan, KITMOTION menyimpan titik rute GPS, akurasi,
+          jarak, pace, dan durasi agar hasil dapat dibuka kembali. Pemantauan GPS
+          dihentikan saat dijeda, selesai, atau halaman ditutup. Rute dilindungi
+          Row Level Security dan hanya dapat dibaca oleh pemilik akun.
+        </p>
+        <p>
           Dengan menggunakan KITMOTION, kamu menyetujui penggunaan kamera untuk
           analisis gerakan. KITMOTION bukan alat medis dan feedback yang diberikan
           bukan diagnosis medis.

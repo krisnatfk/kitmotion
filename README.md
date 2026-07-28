@@ -1,6 +1,6 @@
 # KITMOTION — Application-First MVP
 
-Aplikasi pembelajaran olahraga berbasis web (PWA) untuk siswa SMA. Membaca pose tubuh via kamera (MediaPipe), menghitung repetisi otomatis, memberi skor + feedback real-time, dan gamifikasi (XP, level, badge, challenge).
+Aplikasi pembelajaran olahraga berbasis web (PWA) untuk siswa SMA. Membaca pose tubuh via kamera (MediaPipe), menghitung repetisi otomatis, memberi koreksi teknik real-time, merekam aktivitas lari GPS beserta peta rute, dan memberi gamifikasi (XP, level, badge, challenge).
 
 > **Status IoT:** Future-ready, **tidak aktif**. Tidak ada perangkat/pairing/telemetri/endpoint IoT. Lihat [docs/iot-integration-contract.md](docs/iot-integration-contract.md).
 
@@ -12,6 +12,7 @@ Aplikasi pembelajaran olahraga berbasis web (PWA) untuk siswa SMA. Membaca pose 
 - Tailwind CSS 3.4 (design tokens dari `design.md`, gaya editorial Nike)
 - Supabase (Auth + PostgreSQL + RLS)
 - MediaPipe Tasks Vision `PoseLandmarker` (inference lokal di browser, hanya di `/workout`)
+- Leaflet + OpenStreetMap (peta lari; tidak membutuhkan API key untuk pengujian)
 - React Hook Form + Zod · Vitest · Playwright · PWA (manifest + service worker)
 
 ## Prasyarat
@@ -76,6 +77,16 @@ npm run test:e2e    # Playwright (butuh dev server / webServer otomatis)
 
 > Kamera butuh HTTPS atau `localhost`. Frame tidak direkam/disimpan/dikirim.
 
+## Menguji fitur lari GPS
+
+1. Login → buka `/running` → klik **Mulai lari**.
+2. Izinkan lokasi presisi dan gunakan perangkat di area terbuka.
+3. Peta mengikuti posisi, sementara jarak, durasi aktif, dan pace diperbarui langsung.
+4. Tombol **Jeda** menghentikan pencatatan lokasi dan waktu aktif; **Lanjut** membuat segmen rute baru tanpa garis loncatan.
+5. Selesaikan aktivitas untuk menyimpan rute, split per kilometer, elevasi, dan estimasi kalori.
+
+> Geolocation memerlukan HTTPS atau `localhost`. Tile OpenStreetMap digunakan secara interaktif dengan atribusi terlihat dan tanpa prefetch/offline download.
+
 ## Struktur
 
 ```
@@ -92,12 +103,13 @@ src/
 │  ├─ scoring/               # weighted score + grade (server-authoritative)
 │  ├─ gamification/          # XP, level, badge, challenge (idempotent)
 │  ├─ history/               # list + detail + trend
+│  ├─ running/               # GPS tracker, filter noise, map, metrics, result
 │  ├─ admin/                 # guard, audit, CRUD actions, forms
 │  └─ sensor-integration/    # SensorProvider + NoopSensorProvider + feature flag (inert)
 ├─ lib/                      # utils, env, supabase clients
 ├─ types/                    # database.types.ts
 supabase/
-├─ migrations/               # 0001_init, 0002_rls, 0003_seed
+├─ migrations/               # 0001_init s.d. 0006_running
 └─ config.toml
 docs/iot-integration-contract.md
 ```
@@ -109,6 +121,7 @@ Lihat [.env.example](.env.example). Inti:
 - `SUPABASE_SERVICE_ROLE_KEY` (server only)
 - `AI_PROVIDER`, `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` (server only, opsional)
 - `NEXT_PUBLIC_MEDIAPIPE_MODEL_PATH`, `NEXT_PUBLIC_MEDIAPIPE_WASM_PATH`
+- `NEXT_PUBLIC_MAP_TILE_URL` — provider tile peta; default OpenStreetMap untuk pengujian
 - `NEXT_PUBLIC_IOT_INTEGRATION_ENABLED` — **harus `false`** untuk MVP ini.
 
 ## Deployment (Vercel)
@@ -132,6 +145,7 @@ Email verifikasi yang dibuat ketika Site URL masih localhost tidak dapat diperba
 
 - Frame kamera tidak direkam/disimpan/dikirim ke server.
 - Landmark per frame tidak disimpan; hanya ringkasan sesi + metrik per repetisi.
+- Rute GPS hanya direkam saat tracker lari aktif dan berhenti saat jeda/selesai/halaman ditutup.
 - Data pengguna dilindungi RLS (user hanya baca data miliknya).
 - Skor final & XP dihitung/diberikan server-side; client tidak bisa mengubah.
 - Bukan alat medis; feedback bukan diagnosis.

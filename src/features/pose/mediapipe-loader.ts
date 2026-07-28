@@ -24,9 +24,9 @@ export async function getPoseLandmarker(): Promise<PoseLandmarker> {
       },
       runningMode: "VIDEO",
       numPoses: 1,
-      minPoseDetectionConfidence: 0.5,
-      minPosePresenceConfidence: 0.5,
-      minTrackingConfidence: 0.5,
+      minPoseDetectionConfidence: 0.6,
+      minPosePresenceConfidence: 0.6,
+      minTrackingConfidence: 0.65,
     };
     const landmarker = await PoseLandmarker.createFromOptions(vision, options);
     return landmarker;

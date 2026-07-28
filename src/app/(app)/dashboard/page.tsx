@@ -73,8 +73,9 @@ export default async function DashboardPage() {
         </aside>
       </section>
 
-      <section className="mt-lg grid gap-md tablet-narrow:grid-cols-3" aria-label="Akses cepat fitur">
+      <section className="mt-lg grid gap-md tablet-narrow:grid-cols-2 desktop-small:grid-cols-4" aria-label="Akses cepat fitur">
         <QuickAction href="/exercises" icon="camera" eyebrow="AI camera coach" title="Latihan dengan kamera" body="Pilih gerakan, aktifkan kamera, lalu dapatkan hitungan repetisi dan feedback secara real-time." />
+        <QuickAction href="/running" icon="route" eyebrow="GPS run tracker" title="Lari dan rekam rute" body="Pantau jarak, pace, durasi, serta peta rute langsung dari GPS perangkatmu." />
         <QuickAction href="/history" icon="history" eyebrow="Perkembangan" title="Buka riwayat latihan" body="Lihat skor, repetisi, durasi, feedback, dan tren dari setiap sesi yang sudah selesai." />
         <QuickAction href="/profile" icon="user" eyebrow="Akun siswa" title="Lengkapi profil" body="Atur nama, sekolah, kelas, serta identitas yang tampil pada pengalaman latihanmu." />
       </section>
@@ -114,6 +115,6 @@ function Stat({ label, value, icon }: { label: string; value: string; icon: "bol
   return <div className="rounded-sm border border-white/10 bg-white/[0.04] p-md"><Icon name={icon} className="h-4 w-4 text-sport-lime" /><p className="mt-lg text-[10px] uppercase tracking-widest text-white/40">{label}</p><p className="mt-xs font-display text-2xl">{value}</p></div>;
 }
 
-function QuickAction({ href, icon, eyebrow, title, body }: { href: string; icon: "camera" | "history" | "user"; eyebrow: string; title: string; body: string }) {
+function QuickAction({ href, icon, eyebrow, title, body }: { href: string; icon: "camera" | "route" | "history" | "user"; eyebrow: string; title: string; body: string }) {
   return <Link href={href} className="group flex min-h-48 flex-col rounded-sm border border-hairline-soft bg-white p-xl transition-transform duration-200 hover:-translate-y-1"><span className="grid h-11 w-11 place-items-center rounded-full bg-sport-lime"><Icon name={icon} className="h-5 w-5" /></span><p className="mt-lg text-[10px] font-bold uppercase tracking-widest text-mute">{eyebrow}</p><h2 className="mt-xs text-lg font-semibold">{title}</h2><p className="mt-sm text-xs leading-relaxed text-mute">{body}</p><span className="mt-auto flex items-center gap-sm pt-lg text-xs font-semibold">Buka fitur <Icon name="arrow" className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span></Link>;
 }

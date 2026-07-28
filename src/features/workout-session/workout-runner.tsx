@@ -126,7 +126,11 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
       <div>
         <div className="relative aspect-[3/4] w-full overflow-hidden rounded-sm bg-sport-black tablet-narrow:aspect-video">
           <video ref={camera.videoRef} playsInline muted className="h-full w-full object-cover [transform:scaleX(-1)]" />
-          <PoseOverlay landmarks={landmarks} />
+          <PoseOverlay
+            landmarks={landmarks}
+            videoRef={camera.videoRef}
+            issueCodes={session.live.status === "active" ? session.live.feedback.map((item) => item.code) : []}
+          />
           <div className="pointer-events-none absolute left-md top-md rounded-full bg-black/65 px-md py-sm text-[10px] font-bold uppercase tracking-widest text-white backdrop-blur"><span className="mr-sm inline-block h-2 w-2 rounded-full bg-sport-lime" />Live pose</div>
           {camera.status !== "ready" && <div className="absolute inset-0 flex flex-col items-center justify-center bg-sport-black/90 p-xl text-center text-white"><span className="grid h-16 w-16 place-items-center rounded-full bg-white/10"><Icon name="camera" className="h-7 w-7 text-sport-lime" /></span><h2 className="mt-lg font-display text-3xl uppercase">Kamera belum aktif</h2><p className="mt-sm max-w-md text-sm leading-relaxed text-white/55">Kamera diperlukan untuk membaca gerakan. Video diproses langsung di perangkat dan tidak pernah disimpan.</p><Button onClick={enableCamera} disabled={loadingModel} className="mt-lg bg-sport-lime text-sport-black hover:bg-white">{loadingModel ? "Memuat model…" : "Aktifkan kamera"}</Button>{camera.status === "denied" && <p className="mt-md text-caption-sm text-sale">{camera.error}</p>}</div>}
         </div>
@@ -158,9 +162,30 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
 }
 
 function LiveHud(props: { repCount: number; validReps: number; elapsedMs: number; trackingValid: boolean; feedback: { code: string; severity: string; message: string }[]; liveMetric?: { label: string; value: number }; targetReps: number | null }) {
+  const [coachMessage, setCoachMessage] = useState<{ code: string; severity: string; message: string } | null>(null);
+  const actionable = props.feedback.find((item) => item.code !== "good");
+  const actionableCode = actionable?.code;
+  const actionableMessage = actionable?.message;
+  const actionableSeverity = actionable?.severity;
+  useEffect(() => {
+    if (actionableCode && actionableMessage && actionableSeverity) {
+      setCoachMessage({ code: actionableCode, message: actionableMessage, severity: actionableSeverity });
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setCoachMessage(null);
+    }, 1800);
+    return () => window.clearTimeout(timeout);
+  }, [actionableCode, actionableMessage, actionableSeverity]);
   const seconds = Math.floor(props.elapsedMs / 1000);
   const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-  return <div className="space-y-md"><div className="grid grid-cols-3 gap-sm"><DarkStat label="Valid" value={String(props.validReps)} /><DarkStat label="Total" value={String(props.repCount)} /><DarkStat label="Waktu" value={time} /></div>{props.targetReps && <div><div className="mt-lg flex justify-between text-xs text-white/50"><span>Target</span><span>{props.validReps}/{props.targetReps}</span></div><div className="mt-sm h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-sport-lime" style={{ width: `${Math.min(100, (props.validReps / props.targetReps) * 100)}%` }} /></div></div>}{!props.trackingValid && <p className="rounded-sm bg-danger/15 p-sm text-xs text-[#ff9c9c]" role="status">Pelacakan tubuh hilang — skor dijeda sementara.</p>}{props.liveMetric && <p className="text-xs text-white/50">{props.liveMetric.label}: {Math.round(props.liveMetric.value)}°</p>}{props.feedback.length > 0 && <ul className="space-y-xs" aria-live="polite">{props.feedback.slice(0, 3).map((item) => <li key={item.code} className={item.severity === "warning" || item.severity === "critical" ? "text-xs text-[#ffc6a5]" : "text-xs text-sport-lime"}>{item.message}</li>)}</ul>}</div>;
+  const invalidReps = Math.max(0, props.repCount - props.validReps);
+  return <div className="space-y-md">
+    <div className="grid grid-cols-2 gap-sm"><DarkStat label="Valid" value={String(props.validReps)} /><DarkStat label="Perlu diperbaiki" value={String(invalidReps)} /><DarkStat label="Total" value={String(props.repCount)} /><DarkStat label="Waktu" value={time} /></div>
+    {props.targetReps && <div><div className="mt-lg flex justify-between text-xs text-white/50"><span>Target repetisi valid</span><span>{props.validReps}/{props.targetReps}</span></div><div className="mt-sm h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-sport-lime transition-[width] duration-300" style={{ width: `${Math.min(100, (props.validReps / props.targetReps) * 100)}%` }} /></div></div>}
+    {!props.trackingValid ? <div className="rounded-sm border border-danger/40 bg-danger/15 p-md" role="alert"><p className="text-[10px] font-bold uppercase tracking-widest text-[#ff9c9c]">Pelacakan dijeda</p><p className="mt-xs text-xs leading-relaxed text-white/75">Tubuh tidak terbaca utuh. Kembali ke tengah frame agar penilaian dilanjutkan.</p></div> : coachMessage ? <div className="animate-coach-alert rounded-sm border border-[#ff7657]/45 bg-[#ff7657]/15 p-md" role="alert" aria-live="assertive"><p className="text-[10px] font-bold uppercase tracking-widest text-[#ff9c82]">Koreksi sekarang</p><p className="mt-xs text-sm font-semibold leading-relaxed text-white">{coachMessage.message}</p></div> : <div className="rounded-sm border border-sport-lime/20 bg-sport-lime/10 p-md" aria-live="polite"><p className="text-[10px] font-bold uppercase tracking-widest text-sport-lime">Gerakan terbaca</p><p className="mt-xs text-xs text-white/65">Pertahankan posisi dan selesaikan rentang gerak.</p></div>}
+    {props.liveMetric && <p className="text-xs text-white/50">{props.liveMetric.label}: <strong className="text-white">{Math.round(props.liveMetric.value)}°</strong></p>}
+  </div>;
 }
 
 function DarkStat({ label, value }: { label: string; value: string }) { return <div className="rounded-sm border border-white/10 bg-white/[0.04] p-md"><p className="text-[9px] uppercase tracking-wider text-white/40">{label}</p><p className="mt-xs font-display text-2xl">{value}</p></div>; }
