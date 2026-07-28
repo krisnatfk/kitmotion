@@ -11,6 +11,7 @@ import { createEngine } from "@/features/exercise-engine/registry";
 import { NoopSensorProvider } from "@/features/sensor-integration";
 import type { SensorSessionSummary } from "@/features/sensor-integration";
 import type { FinalizeSessionInput, RepPayload, FeedbackPayload } from "./schema";
+import { createClientSessionId, toNonnegativeMilliseconds } from "./payload";
 
 export type WorkoutStatus = "idle" | "ready" | "active" | "paused" | "finished";
 
@@ -144,8 +145,8 @@ export function useWorkoutSession({
 
     const repetitions: RepPayload[] = metrics.repetitions.map((r) => ({
       repNumber: r.repNumber,
-      startedOffsetMs: r.startedOffsetMs,
-      completedOffsetMs: r.completedOffsetMs,
+      startedOffsetMs: toNonnegativeMilliseconds(r.startedOffsetMs),
+      completedOffsetMs: toNonnegativeMilliseconds(r.completedOffsetMs),
       isValid: r.isValid,
       formScore: roundOrNull(r.metrics.formScore),
       rangeScore: roundOrNull(r.metrics.rangeScore),
@@ -163,15 +164,12 @@ export function useWorkoutSession({
       severity: f.severity,
       message: f.message,
       occurrenceCount: f.occurrenceCount,
-      firstOffsetMs: f.firstOffsetMs,
-      lastOffsetMs: f.lastOffsetMs,
+      firstOffsetMs: toNonnegativeMilliseconds(f.firstOffsetMs),
+      lastOffsetMs: toNonnegativeMilliseconds(f.lastOffsetMs),
     }));
 
     // clientSessionId is generated per session attempt; idempotency key for the server.
-    const clientSessionId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `cs-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const clientSessionId = createClientSessionId();
 
     return {
       clientSessionId,

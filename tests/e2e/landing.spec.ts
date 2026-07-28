@@ -68,6 +68,12 @@ test("register page shows the form fields", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: /^Kata sandi$/i })).toBeVisible();
 });
 
+test("invalid email confirmation returns a friendly login error", async ({ page }) => {
+  await page.goto("/auth/callback");
+  await expect(page).toHaveURL(/\/login\?error=/);
+  await expect(page.getByText(/Tautan verifikasi tidak valid/i)).toBeVisible();
+});
+
 for (const route of ["/login", "/register"] as const) {
   test(`${route} stays inside the desktop viewport`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });

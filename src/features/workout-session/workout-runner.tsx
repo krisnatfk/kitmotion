@@ -10,6 +10,7 @@ import { PoseOverlay, checkReadiness, getPoseLandmarker, releasePoseLandmarker, 
 import type { ExerciseConfig, NormalizedLandmark, PoseFrame } from "@/features/exercise-engine/core/types";
 import { useWorkoutSession } from "./use-workout-session";
 import { finalizeSession, type FinalizeResult } from "./actions";
+import type { FinalizeSessionInput } from "./schema";
 
 type WorkoutRunnerProps = {
   exerciseSlug: string;
@@ -31,7 +32,9 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
   const [readiness, setReadiness] = useState({ status: "no-body", message: "Aktifkan kamera untuk memulai." });
   const [finalizing, setFinalizing] = useState(false);
   const [result, setResult] = useState<FinalizeResult | null>(null);
+  const [pendingPayload, setPendingPayload] = useState<FinalizeSessionInput | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const finalizingRef = useRef(false);
   const latestReady = useRef(false);
 
   const session = useWorkoutSession({ engineKey, config, exerciseSlug, targetReps, targetSeconds });
@@ -49,9 +52,9 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
   const enableCamera = useCallback(async () => {
     setError(null);
     setLoadingModel(true);
-    camera.start();
     try {
-      setLandmarker(await getPoseLandmarker());
+      const [model] = await Promise.all([getPoseLandmarker(), camera.start()]);
+      setLandmarker(model);
     } catch {
       setError("Gagal memuat model pose. Periksa koneksi internet lalu coba lagi.");
     } finally {
@@ -61,28 +64,39 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
 
   const startSession = useCallback(async () => {
     setError(null);
+    setPendingPayload(null);
+    setResult(null);
     await session.start();
   }, [session]);
 
   const finishSession = useCallback(async () => {
-    if (finalizing) return;
+    if (finalizingRef.current) return;
+    finalizingRef.current = true;
     setFinalizing(true);
     setError(null);
     try {
-      const payload = await session.finish();
+      const payload = pendingPayload ?? await session.finish();
       if (!payload) {
         setError("Tidak ada data sesi untuk disimpan.");
         return;
       }
+      if (!pendingPayload) {
+        setPendingPayload(payload);
+        camera.stop();
+      }
       const response = await finalizeSession(payload);
       if ("error" in response) setError(response.error);
-      else setResult(response);
+      else {
+        setPendingPayload(null);
+        setResult(response);
+      }
     } catch {
       setError("Gagal menyimpan sesi. Coba lagi.");
     } finally {
+      finalizingRef.current = false;
       setFinalizing(false);
     }
-  }, [finalizing, session]);
+  }, [camera, pendingPayload, session]);
 
   useEffect(() => () => releasePoseLandmarker(), []);
 
@@ -119,7 +133,14 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
         <p className="mt-md flex items-start gap-sm text-xs leading-relaxed text-mute"><Icon name="camera" className="mt-0.5 h-4 w-4 shrink-0" />{cameraPosition}</p>
       </div>
       <aside className="h-fit rounded-sm bg-sport-black p-xl text-white desktop-small:sticky desktop-small:top-28">
-        {phase !== "active" ? <>
+        {phase === "finished" && pendingPayload ? <>
+          <p className="text-xs font-bold uppercase tracking-widest text-white/40">Penyimpanan sesi</p>
+          <div className="mt-lg rounded-sm border border-white/10 bg-white/[0.04] p-lg">
+            <p className="font-display text-2xl uppercase">Latihan sudah selesai</p>
+            <p className="mt-sm text-xs leading-relaxed text-white/55">Data latihan tetap tersedia di perangkat ini. Coba simpan kembali tanpa perlu mengulang sesi.</p>
+          </div>
+          <Button onClick={finishSession} disabled={finalizing} className="mt-xl w-full bg-sport-lime text-sport-black hover:bg-white">{finalizing ? "Menyimpan…" : "Coba simpan lagi"}</Button>
+        </> : phase !== "active" ? <>
           <p className="text-xs font-bold uppercase tracking-widest text-white/40">Status kesiapan</p>
           <div className="mt-lg flex items-start gap-md"><span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${readiness.status === "ready" ? "bg-sport-lime" : "bg-white/25"}`} /><p className="text-sm leading-relaxed text-white/70" role="status" aria-live="polite">{readiness.message}</p></div>
           <div className="mt-xl space-y-md border-y border-white/10 py-lg">{["Seluruh tubuh terlihat", "Area latihan aman", "Pencahayaan cukup"].map((item) => <p key={item} className="flex items-center gap-sm text-xs text-white/50"><Icon name="check" className="h-4 w-4 text-sport-lime" />{item}</p>)}</div>

@@ -36,7 +36,9 @@ export async function finalizeSession(
 ): Promise<FinalizeResult | FinalizeError> {
   const parsed = finalizeSessionSchema.safeParse(input);
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Input sesi tidak valid." };
+    const issue = parsed.error.issues[0];
+    const field = issue?.path.length ? ` (${issue.path.join(".")})` : "";
+    return { error: `Data sesi tidak valid${field}. Silakan coba simpan kembali.` };
   }
   const data = parsed.data;
 
@@ -46,6 +48,19 @@ export async function finalizeSession(
   }
   if (data.validReps + data.invalidReps !== data.totalReps) {
     return { error: "Hitungan repetisi valid/invalid tidak konsisten." };
+  }
+  for (const [index, repetition] of data.repetitions.entries()) {
+    if (repetition.repNumber !== index + 1) {
+      return { error: "Urutan repetisi tidak konsisten." };
+    }
+    if (repetition.completedOffsetMs < repetition.startedOffsetMs) {
+      return { error: `Waktu repetisi ${repetition.repNumber} tidak valid.` };
+    }
+  }
+  for (const feedback of data.feedback) {
+    if (feedback.firstOffsetMs != null && feedback.lastOffsetMs != null && feedback.lastOffsetMs < feedback.firstOffsetMs) {
+      return { error: "Rentang waktu feedback tidak valid." };
+    }
   }
   // sensor_source is always 'none' in this phase (no IoT).
   if (data.sensorSummary && data.sensorSummary.source !== "none") {
@@ -75,6 +90,7 @@ export async function finalizeSession(
     .order("version", { ascending: false })
     .limit(1)
     .single();
+  if (!version) return { error: "Versi latihan aktif tidak ditemukan." };
 
   const admin = getSupabaseServiceRole();
 
@@ -87,12 +103,17 @@ export async function finalizeSession(
     .eq("client_session_id", data.clientSessionId)
     .single();
   if (existing) {
+    const { data: progress } = await admin
+      .from("user_progress")
+      .select("current_level")
+      .eq("user_id", user.id)
+      .single();
     return {
       sessionId: existing.id,
       finalScore: Number(existing.final_score ?? 0),
       grade: existing.grade ?? "E",
       xpAwarded: 0,
-      newLevel: 0,
+      newLevel: progress?.current_level ?? 1,
       newBadges: [],
       challengesCompleted: [],
     };
@@ -108,7 +129,7 @@ export async function finalizeSession(
     .insert({
       user_id: user.id,
       exercise_id: exercise.id,
-      exercise_version_id: version?.id ?? null,
+      exercise_version_id: version.id,
       client_session_id: data.clientSessionId,
       status: "completed",
       started_at: new Date(Date.now() - data.durationSeconds * 1000).toISOString(),
@@ -130,8 +151,8 @@ export async function finalizeSession(
       sensor_source: "none",
       sensor_summary: null,
       app_version: null,
-      scoring_version: version?.scoring_version ?? SCORING_VERSION,
-      metadata: { engine_key: version?.engine_key ?? null },
+      scoring_version: version.scoring_version ?? SCORING_VERSION,
+      metadata: { engine_key: version.engine_key },
     })
     .select("id")
     .single();
@@ -141,9 +162,13 @@ export async function finalizeSession(
   }
   const sessionId = sessionRow.id;
 
+  const removeIncompleteSession = async () => {
+    await admin.from("workout_sessions").delete().eq("id", sessionId);
+  };
+
   // Insert repetitions.
   if (data.repetitions.length > 0) {
-    await admin.from("workout_repetitions").insert(
+    const { error: repetitionsError } = await admin.from("workout_repetitions").insert(
       data.repetitions.map((r) => ({
         session_id: sessionId,
         rep_number: r.repNumber,
@@ -158,11 +183,15 @@ export async function finalizeSession(
         issue_codes: r.issueCodes,
       })),
     );
+    if (repetitionsError) {
+      await removeIncompleteSession();
+      return { error: "Gagal menyimpan detail repetisi. Silakan coba lagi." };
+    }
   }
 
   // Insert feedback summary.
   if (data.feedback.length > 0) {
-    await admin.from("session_feedback").insert(
+    const { error: feedbackError } = await admin.from("session_feedback").insert(
       data.feedback.map((f) => ({
         session_id: sessionId,
         repetition_id: null,
@@ -174,6 +203,10 @@ export async function finalizeSession(
         last_offset_ms: f.lastOffsetMs,
       })),
     );
+    if (feedbackError) {
+      await removeIncompleteSession();
+      return { error: "Gagal menyimpan feedback latihan. Silakan coba lagi." };
+    }
   }
 
   // Rewards (XP / level / badges / challenges) — idempotent.

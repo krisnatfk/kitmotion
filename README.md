@@ -61,7 +61,7 @@ update public.profiles set role = 'admin' where id = '<user-uuid>';
 ```bash
 npm run lint
 npm run typecheck
-npm run test        # 58 unit + integration tests
+npm run test        # unit + integration tests
 npm run build
 npm run test:e2e    # Playwright (butuh dev server / webServer otomatis)
 ```
@@ -116,7 +116,10 @@ Lihat [.env.example](.env.example). Inti:
 1. Push repo ke GitHub.
 2. Import di Vercel, set env vars (sama seperti `.env`).
 3. Jalankan migration Supabase (`supabase db push` atau SQL editor).
-4. Deploy. PWA aktif di production (service worker hanya terdaftar saat `NODE_ENV=production`).
+4. Di Supabase **Authentication > URL Configuration**, isi Site URL dengan URL production dan tambahkan `https://<domain>/auth/callback` ke Redirect URLs.
+5. Di Supabase **Authentication > Emails > SMTP Settings**, aktifkan Custom SMTP. Email bawaan Supabase hanya untuk pengujian dan dibatasi sangat rendah, sehingga tidak cocok untuk pendaftaran publik.
+6. Setelah Custom SMTP aktif, sesuaikan kuota di **Authentication > Rate Limits** dengan kapasitas provider email.
+7. Deploy. PWA aktif di production (service worker hanya terdaftar saat `NODE_ENV=production`).
 
 ## Privasi
 

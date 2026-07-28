@@ -1,10 +1,17 @@
 import { z } from "zod";
 
+const persistedMillisecondsSchema = z
+  .number()
+  .finite()
+  .nonnegative()
+  .transform((value) => Math.round(value))
+  .pipe(z.number().int().nonnegative());
+
 /** Per-repetition payload sent from the client and validated server-side. */
 export const repPayloadSchema = z.object({
-  repNumber: z.number().int().nonnegative(),
-  startedOffsetMs: z.number().int().nonnegative(),
-  completedOffsetMs: z.number().int().nonnegative(),
+  repNumber: z.number().int().positive(),
+  startedOffsetMs: persistedMillisecondsSchema,
+  completedOffsetMs: persistedMillisecondsSchema,
   isValid: z.boolean(),
   formScore: z.number().min(0).max(100).nullable(),
   rangeScore: z.number().min(0).max(100).nullable(),
@@ -18,15 +25,15 @@ export const feedbackPayloadSchema = z.object({
   code: z.string(),
   severity: z.enum(["info", "warning", "critical"]),
   message: z.string(),
-  occurrenceCount: z.number().int().nonnegative(),
-  firstOffsetMs: z.number().int().nullable(),
-  lastOffsetMs: z.number().int().nullable(),
+  occurrenceCount: z.number().int().positive(),
+  firstOffsetMs: persistedMillisecondsSchema.nullable(),
+  lastOffsetMs: persistedMillisecondsSchema.nullable(),
 });
 
 export const finalizeSessionSchema = z.object({
   clientSessionId: z.string().uuid(),
   exerciseSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  durationSeconds: z.number().int().nonnegative(),
+  durationSeconds: z.number().int().nonnegative().max(24 * 60 * 60),
   targetReps: z.number().int().nonnegative().nullable(),
   targetSeconds: z.number().int().nonnegative().nullable(),
   totalReps: z.number().int().nonnegative(),
@@ -45,7 +52,7 @@ export const finalizeSessionSchema = z.object({
     .object({
       source: z.enum(["none", "iot-necklace"]),
       sampleCount: z.number().int().nonnegative(),
-      connectedDurationMs: z.number().int().nonnegative(),
+      connectedDurationMs: persistedMillisecondsSchema,
     })
     .nullable()
     .default(null),

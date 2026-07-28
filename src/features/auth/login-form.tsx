@@ -13,6 +13,9 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
+  const verificationError = searchParams.has("error")
+    ? "Tautan verifikasi tidak valid atau sudah kedaluwarsa."
+    : null;
   const [server, setServer] = useState<{ error?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -42,7 +45,7 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-md" noValidate>
-      {server?.error && <FormError>{server.error}</FormError>}
+      {(server?.error || verificationError) && <FormError>{server?.error ?? verificationError}</FormError>}
 
       <div>
         <Label htmlFor="email">Email</Label>

@@ -1,18 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { FieldError, FormError, FormSuccess, Input, Label, PasswordInput } from "@/components/ui/field";
-import { registerAction, type ActionResult } from "./actions";
+import { getSupabaseBrowser } from "@/lib/supabase/client";
+import { translateAuthError } from "./errors";
 import { registerSchema, type RegisterInput } from "./schemas";
+
+type RegisterResult = { error?: string; message?: string };
 
 export function RegisterForm() {
   const router = useRouter();
-  const [server, setServer] = useState<ActionResult | null>(null);
+  const [server, setServer] = useState<RegisterResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const {
     register,
@@ -24,14 +28,39 @@ export function RegisterForm() {
   });
 
   async function onSubmit(values: RegisterInput) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setServer(null);
-    const result = await registerAction(values);
-    setSubmitting(false);
-    setServer(result);
-    if (result.redirectTo) {
-      router.push(result.redirectTo);
+    try {
+      // Sign up from the browser so Supabase rate-limits each end-user IP,
+      // instead of grouping every registration under a Vercel server IP.
+      const supabase = getSupabaseBrowser();
+      const { data, error } = await supabase.auth.signUp({
+        email: values.email,
+        password: values.password,
+        options: {
+          data: { full_name: values.full_name },
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+        },
+      });
+
+      if (error) {
+        setServer({ error: translateAuthError(error.message, error.code, error.status) });
+        return;
+      }
+      if (!data.session) {
+        setServer({ message: "Akun dibuat. Cek email untuk verifikasi sebelum masuk." });
+        return;
+      }
+
+      router.push("/dashboard");
       router.refresh();
+    } catch {
+      setServer({ error: "Pendaftaran tidak dapat diproses. Periksa koneksi lalu coba lagi." });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   }
 

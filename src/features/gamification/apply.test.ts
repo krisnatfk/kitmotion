@@ -150,7 +150,10 @@ describe("applySessionRewards idempotency", () => {
     });
     const result = await applySessionRewards(c.client as never, baseInput);
     expect(result.xpAwarded).toBe(0);
+    expect(result.newLevel).toBe(1);
     expect(c.xpInserts).toHaveLength(0);
+    expect(c.progressUpserts).toHaveLength(0);
+    expect(c.challengeUpserts).toHaveLength(0);
   });
 
   it("awards a badge when the criteria is met", async () => {

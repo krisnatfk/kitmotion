@@ -8,12 +8,10 @@ import {
   forgotPasswordSchema,
   loginSchema,
   profileSchema,
-  registerSchema,
   resetPasswordSchema,
   type ForgotPasswordInput,
   type LoginInput,
   type ProfileInput,
-  type RegisterInput,
   type ResetPasswordInput,
 } from "./schemas";
 
@@ -45,29 +43,6 @@ function safeNext(next: unknown): string {
     return next;
   }
   return "/dashboard";
-}
-
-export async function registerAction(input: RegisterInput): Promise<ActionResult> {
-  const parsed = registerSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Input tidak valid" };
-  }
-
-  const supabase = await getSupabaseServer();
-  const { data, error } = await supabase.auth.signUp({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    options: { data: { full_name: parsed.data.full_name } },
-  });
-
-  if (error) return { error: translateAuthError(error.message) };
-
-  // No session => email confirmation is enabled; ask the user to verify.
-  if (!data.session) {
-    return { message: "Akun dibuat. Cek email untuk verifikasi sebelum masuk." };
-  }
-
-  return { redirectTo: "/dashboard" };
 }
 
 export async function loginAction(input: LoginInput & { next?: string }): Promise<ActionResult> {

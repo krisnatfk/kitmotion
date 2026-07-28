@@ -31,12 +31,15 @@ export default async function WorkoutPage({
   const safeTarget = Number.isFinite(requestedTarget) && requestedTarget > 0 && requestedTarget <= 500
     ? requestedTarget
     : null;
-  const targetReps = query.mode === "reps" && safeTarget != null
-    ? safeTarget
-    : exercise.default_target_reps ?? null;
-  const targetSeconds = query.mode === "seconds" && safeTarget != null
-    ? safeTarget
-    : exercise.default_target_seconds ?? null;
+  let targetReps = exercise.default_target_reps ?? null;
+  let targetSeconds = exercise.default_target_seconds ?? null;
+  if (query.mode === "reps" && safeTarget != null) {
+    targetReps = safeTarget;
+    targetSeconds = null;
+  } else if (query.mode === "seconds" && safeTarget != null) {
+    targetReps = null;
+    targetSeconds = safeTarget;
+  }
 
   return (
     <WorkoutRunner

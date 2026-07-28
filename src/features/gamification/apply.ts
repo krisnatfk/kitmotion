@@ -79,6 +79,18 @@ export async function applySessionRewards(
     last_activity_date: null,
   };
 
+  // A replay must be a true no-op. Without this guard, a transient client
+  // retry could increment sessions, repetitions, streaks, and challenges even
+  // though the workout XP event was correctly rejected as a duplicate.
+  if (alreadyRewarded) {
+    return {
+      xpAwarded: 0,
+      newLevel: prev.current_level,
+      newBadges: [],
+      challengesCompleted: [],
+    };
+  }
+
   // Streak: increment if activity is on a new day vs last_activity_date.
   const today = input.completedAt.slice(0, 10);
   const lastDate = prev.last_activity_date ? String(prev.last_activity_date).slice(0, 10) : null;
@@ -88,7 +100,7 @@ export async function applySessionRewards(
     currentStreak = lastDate === yesterday ? prev.current_streak + 1 : 1;
   }
 
-  const newTotalXp = prev.total_xp + (alreadyRewarded ? 0 : xp.total);
+  const newTotalXp = prev.total_xp + xp.total;
   const newTotalSessions = prev.total_sessions + 1;
   const newTotalValidReps = prev.total_valid_reps + input.validReps;
   const newLongestStreak = Math.max(prev.longest_streak, currentStreak);
@@ -152,7 +164,7 @@ export async function applySessionRewards(
   }
 
   return {
-    xpAwarded: (alreadyRewarded ? 0 : xp.total) + bonusRewardXp,
+    xpAwarded: xp.total + bonusRewardXp,
     newLevel: finalLevel,
     newBadges: badgeRewards.badges,
     challengesCompleted: challengeRewards.challenges,
