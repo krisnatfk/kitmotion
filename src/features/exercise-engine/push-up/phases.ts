@@ -1,5 +1,6 @@
 /** Push-up state-machine phases (prd.md §10.3). */
 export const PushUpPhase = {
+  SETUP: "setup",
   UP: "up",
   DESCENDING: "descending",
   DOWN: "down",

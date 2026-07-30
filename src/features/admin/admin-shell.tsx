@@ -15,6 +15,8 @@ const NAVIGATION: { href: string; label: string; icon: IconName; exact?: boolean
   { href: "/admin/badges", label: "Badge", icon: "target" },
   { href: "/admin/challenges", label: "Challenge", icon: "bolt" },
   { href: "/admin/sessions", label: "Aktivitas", icon: "history" },
+  { href: "/admin/calibration", label: "Kalibrasi pose", icon: "camera" },
+  { href: "/admin/ai", label: "Provider AI", icon: "bolt" },
   { href: "/admin/audit", label: "Audit sistem", icon: "shield" },
 ];
 

@@ -15,9 +15,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "db:push": "supabase db push",
-    "db:reset": "supabase db reset",
-    "db:types": "supabase gen types typescript --local --schema public > src/types/database.types.ts"
+    "ai:test": "node scripts/test-ai.mjs",
+    "db:link": "npx supabase link",
+    "db:push": "npx supabase db push",
+    "db:reset": "npx supabase db reset",
+    "db:types": "npx supabase gen types typescript --local --schema public > src/types/database.types.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

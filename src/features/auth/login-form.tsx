@@ -12,7 +12,7 @@ import { loginSchema, type LoginInput } from "./schemas";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = searchParams.get("next") ?? undefined;
   const verificationError = searchParams.has("error")
     ? "Tautan verifikasi tidak valid atau sudah kedaluwarsa."
     : null;

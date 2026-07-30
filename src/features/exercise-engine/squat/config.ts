@@ -2,7 +2,7 @@ import type { ExerciseConfig } from "../core/types";
 
 /** Squat engine version (stored in exercise_versions.scoring_version). */
 export const SQUAT_ENGINE_KEY = "squat";
-export const SQUAT_SCORING_VERSION = "cam-v1";
+export const SQUAT_SCORING_VERSION = "cam-v2";
 
 export interface SquatConfig {
   /** Knee angle (hip-knee-ankle) at or below which the rep is "deep enough" (bottom). */
@@ -11,6 +11,10 @@ export interface SquatConfig {
   kneeStandMin: number;
   /** Max torso lean (degrees from vertical) before "back bend" feedback. */
   hipBackLeanMax: number;
+  /** Maximum hip angle at the bottom, preventing knee-only curls from counting. */
+  hipBottomMax: number;
+  /** Maximum torso lean allowed for a valid repetition. */
+  torsoLeanValidMax: number;
   /** Consecutive confirming frames required for a phase transition (anti-jitter). */
   debounceFrames: number;
   /** Minimum landmark visibility to consider tracking valid. */
@@ -23,11 +27,13 @@ export interface SquatConfig {
   kneeCaveinRatio: number;
 }
 
-/** Defaults mirror supabase/migrations/0003_seed.sql (squat config). */
+/** Defaults mirror the latest active squat scoring migration. */
 export const SQUAT_DEFAULT_CONFIG: SquatConfig = {
   kneeBottomMax: 100,
   kneeStandMin: 160,
   hipBackLeanMax: 70,
+  hipBottomMax: 125,
+  torsoLeanValidMax: 50,
   debounceFrames: 3,
   minConfidence: 0.5,
   tempoFastMs: 400,

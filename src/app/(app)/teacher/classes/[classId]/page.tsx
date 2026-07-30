@@ -3,6 +3,9 @@ import { Container } from "@/components/ui/container";
 import { Icon } from "@/components/ui/icons";
 import { removeStudentAction } from "@/features/classes/actions";
 import { getTeacherClassReport } from "@/features/classes/queries";
+import { TeacherClassInsightPanel } from "@/features/ai-coach/components";
+import { getTeacherClassInsight } from "@/features/ai-coach/insights";
+import { withTimeoutFallback } from "@/lib/async";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +19,27 @@ export default async function TeacherClassReportPage({
   const { classId } = await params;
   const query = await searchParams;
   const report = await getTeacherClassReport(classId, query);
+  const aiInsight = await withTimeoutFallback(getTeacherClassInsight({
+    teacherId: report.classroom.teacher_id,
+    classroomId: report.classroom.id,
+    className: report.classroom.name,
+    totalStudents: report.students.length,
+    totalSessions: report.summary.totalSessions,
+    totalValidReps: report.summary.totalReps,
+    averageScore: report.summary.averageScore,
+    durationSeconds: report.summary.durationSeconds,
+    rows: report.rows.map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      exerciseName: row.exerciseName,
+      validReps: row.valid_reps,
+      invalidReps: row.invalid_reps,
+      finalScore: Number(row.final_score ?? 0),
+      completedAt: row.completed_at,
+    })),
+    commonIssues: report.commonIssues,
+    weekly: report.weekly,
+  }), null, 8_000);
   return (
     <Container className="py-xl tablet-narrow:py-section">
       <Link href="/teacher" className="inline-flex items-center gap-sm text-sm text-mute"><Icon name="arrow" className="h-4 w-4 rotate-180" /> Dashboard guru</Link>
@@ -36,6 +60,8 @@ export default async function TeacherClassReportPage({
         <Summary label="Rata-rata skor" value={String(report.summary.averageScore)} icon="chart" />
         <Summary label="Waktu latihan" value={formatDuration(report.summary.durationSeconds)} icon="history" />
       </section>
+
+      {aiInsight && <TeacherClassInsightPanel insight={aiInsight} />}
 
       <section className="mt-lg rounded-sm bg-white p-xl">
         <div><p className="text-xs font-bold uppercase tracking-widest text-mute">Perkembangan mingguan</p><h2 className="mt-xs font-display text-3xl uppercase">Skor dan konsistensi</h2></div>

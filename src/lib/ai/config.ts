@@ -11,6 +11,7 @@ export interface AIConfig {
   baseUrl: string;
   model: string;
   timeoutMs: number;
+  responseFormat: "json_schema" | "json_object";
 }
 
 const DEFAULT_PROVIDER = "openai-compatible";
@@ -42,6 +43,14 @@ function parseTimeout(rawTimeout: string): number {
   return timeout;
 }
 
+function parseResponseFormat(rawFormat: string): "json_schema" | "json_object" {
+  const format = rawFormat || "json_schema";
+  if (format !== "json_schema" && format !== "json_object") {
+    throw new Error("AI_RESPONSE_FORMAT harus json_schema atau json_object.");
+  }
+  return format;
+}
+
 /** Returns null while the optional AI coach has not been configured. */
 export function getAIConfig(source: EnvSource = process.env): AIConfig | null {
   const baseUrl = value(source, "AI_BASE_URL");
@@ -56,6 +65,7 @@ export function getAIConfig(source: EnvSource = process.env): AIConfig | null {
     baseUrl: normalizeBaseUrl(baseUrl),
     model,
     timeoutMs: parseTimeout(value(source, "AI_TIMEOUT_MS")),
+    responseFormat: parseResponseFormat(value(source, "AI_RESPONSE_FORMAT")),
   };
 }
 

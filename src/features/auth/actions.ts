@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseServer, getSupabaseServiceRole } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { translateAuthError } from "./errors";
 import {
@@ -62,7 +62,22 @@ export async function loginAction(input: LoginInput & { next?: string }): Promis
   if (input.next) return { redirectTo: safeNext(input.next) };
   const { data: { user } } = await supabase.auth.getUser();
   if (user) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    const { data: sessionProfile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    let profile = sessionProfile;
+    if (!profile) {
+      try {
+        const service = getSupabaseServiceRole();
+        const { data: verifiedProfile } = await service
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        profile = verifiedProfile;
+      } catch {
+        // Keep the normal student redirect if the optional server fallback is unavailable.
+      }
+    }
+    if (profile?.role === "admin") return { redirectTo: "/admin" };
     if (profile?.role === "teacher") return { redirectTo: "/teacher" };
   }
   return { redirectTo: "/dashboard" };

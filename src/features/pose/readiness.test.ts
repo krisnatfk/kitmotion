@@ -40,6 +40,28 @@ describe("checkReadiness", () => {
     setLandmark(lm, POSE_LANDMARKS.RIGHT_ANKLE, 0.55, 0.85, 0.1);
     expect(checkReadiness(lm).status).toBe("side-cut");
   });
+
+  it("accepts a side-on top plank for push-up", () => {
+    const lm = fullBody(0.1);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_SHOULDER, 0.2, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_ELBOW, 0.3, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_WRIST, 0.4, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_HIP, 0.48, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_KNEE, 0.64, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_ANKLE, 0.8, 0.5);
+    expect(checkReadiness(lm, "push-up").status).toBe("ready");
+  });
+
+  it("rejects a standing pose as push-up readiness", () => {
+    const lm = fullBody(0.1);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_SHOULDER, 0.5, 0.2);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_ELBOW, 0.5, 0.3);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_WRIST, 0.5, 0.4);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_HIP, 0.5, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_KNEE, 0.5, 0.7);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_ANKLE, 0.5, 0.9);
+    expect(checkReadiness(lm, "push-up").status).toBe("wrong-pose");
+  });
 });
 
 describe("toPoseFrame", () => {

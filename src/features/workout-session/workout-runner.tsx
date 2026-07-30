@@ -11,6 +11,7 @@ import type { ExerciseConfig, NormalizedLandmark, PoseFrame } from "@/features/e
 import { useWorkoutSession } from "./use-workout-session";
 import { finalizeSession, type FinalizeResult } from "./actions";
 import type { FinalizeSessionInput } from "./schema";
+import { SessionCoachPanel } from "@/features/ai-coach/components";
 
 type WorkoutRunnerProps = {
   exerciseSlug: string;
@@ -52,12 +53,12 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
   const session = useWorkoutSession({ engineKey, config, exerciseSlug, targetReps, targetSeconds, milestoneLevel });
 
   const handleFrame = useCallback((frame: PoseFrame) => {
-    const nextReadiness = checkReadiness(frame.landmarks);
+    const nextReadiness = checkReadiness(frame.landmarks, exerciseSlug);
     setReadiness({ status: nextReadiness.status, message: nextReadiness.message });
     latestReady.current = nextReadiness.status === "ready";
     setLandmarks(frame.landmarks.length > 0 ? frame.landmarks : null);
     if (session.live.status === "active") session.processFrame(frame);
-  }, [session]);
+  }, [exerciseSlug, session]);
 
   usePoseDetection({ video: camera.videoRef.current, landmarker: landmarker as never, active: camera.status === "ready", onFrame: handleFrame });
 
@@ -209,6 +210,7 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
       {result.newBadges.length > 0 && <ResultList title="Badge baru" items={result.newBadges.map((badge) => ({ key: badge.code, label: `🏅 ${badge.name}` }))} />}
       {result.challengesCompleted.length > 0 && <ResultList title="Challenge selesai" items={result.challengesCompleted.map((challenge) => ({ key: challenge.code, label: `🎯 ${challenge.title}` }))} />}
       {result.milestone && <div className={`mt-lg rounded-sm p-lg text-sm ${result.milestone.success ? "bg-[#eaf7ee] text-success" : "bg-[#fff7df] text-charcoal"}`}><strong>{result.milestone.success ? "Milestone berhasil" : "Milestone belum berhasil"}</strong><p className="mt-xs">{result.milestone.message}</p></div>}
+      {result.aiCoach && <SessionCoachPanel insight={result.aiCoach} />}
       <div className="mt-section flex flex-wrap gap-md"><Button onClick={() => router.push("/history")}>Lihat riwayat</Button><Button variant="secondary" onClick={() => router.push("/exercises")}>Latihan lain</Button></div>
     </Container>;
   }

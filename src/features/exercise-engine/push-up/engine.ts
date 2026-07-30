@@ -23,8 +23,10 @@ interface PushUpRep {
   startedAtMs: number;
   completedAtMs: number;
   minElbowAngle: number;
-  maxHipDeviation: number; // signed: negative = sag, positive = rise
+  maxHipSag: number;
+  maxHipRise: number;
   maxHipAbsDeviation: number;
+  minBodyHorizontalRatio: number;
   maxElbowAsymmetry: number;
   reachedDown: boolean;
   issueCodes: Set<string>;
@@ -39,7 +41,7 @@ interface PushUpRep {
  */
 export class PushUpEngine implements ExerciseEngine {
   private config: PushUpConfig = PUSH_UP_DEFAULT_CONFIG;
-  private phase: PushUpPhase = PushUpPhase.UP;
+  private phase: PushUpPhase = PushUpPhase.SETUP;
   private repCount = 0;
   private validReps = 0;
   private invalidReps = 0;
@@ -50,6 +52,7 @@ export class PushUpEngine implements ExerciseEngine {
   private pendingCount = 0;
   private startMs = 0;
   private lastFrameMs = 0;
+  private orientationLossFrames = 0;
 
   initialize(config: ExerciseConfig): void {
     this.config = parsePushUpConfig(config);
@@ -57,7 +60,7 @@ export class PushUpEngine implements ExerciseEngine {
   }
 
   reset(): void {
-    this.phase = PushUpPhase.UP;
+    this.phase = PushUpPhase.SETUP;
     this.repCount = 0;
     this.validReps = 0;
     this.invalidReps = 0;
@@ -68,37 +71,54 @@ export class PushUpEngine implements ExerciseEngine {
     this.pendingCount = 0;
     this.startMs = 0;
     this.lastFrameMs = 0;
+    this.orientationLossFrames = 0;
   }
 
   processFrame(frame: PoseFrame): ExerciseFrameResult {
     if (this.startMs === 0) this.startMs = frame.timestampMs;
     this.lastFrameMs = frame.timestampMs;
 
-    const { trackingValid, elbowAngle, hipDeviation, elbowAsymmetry } = this.readKinematics(frame.landmarks);
+    const { trackingValid, elbowAngle, hipDeviation, elbowAsymmetry, bodyHorizontalRatio } = this.readKinematics(frame.landmarks);
 
     if (!trackingValid) {
       this.abortIncompleteRep();
-      return this.result([], false);
+      return this.result([], false, elbowAngle);
     }
+
+    const bodyHorizontal = bodyHorizontalRatio >= this.config.bodyHorizontalMinRatio;
+    const plankReady = bodyHorizontal
+      && hipDeviation >= -this.config.hipSagMaxDrop
+      && hipDeviation <= this.config.hipRiseMaxRise
+      && elbowAngle >= this.config.elbowUpMin - 5;
+    const feedback: FrameFeedback[] = [];
+    this.evaluateIssues(elbowAngle, hipDeviation, elbowAsymmetry, bodyHorizontal, feedback);
+
+    if (this.phase === PushUpPhase.SETUP) {
+      this.advance(elbowAngle, plankReady, frame.timestampMs);
+      return this.result(feedback, true, elbowAngle);
+    }
+
+    if (!bodyHorizontal) {
+      this.orientationLossFrames += 1;
+      if (this.orientationLossFrames >= this.config.debounceFrames) this.abortIncompleteRep();
+      return this.result(feedback, true, elbowAngle);
+    }
+    this.orientationLossFrames = 0;
 
     if (this.currentRep) {
       this.currentRep.minElbowAngle = Math.min(this.currentRep.minElbowAngle, elbowAngle);
-      if (hipDeviation < 0) {
-        this.currentRep.maxHipDeviation = Math.min(this.currentRep.maxHipDeviation, hipDeviation);
-      } else {
-        this.currentRep.maxHipAbsDeviation = Math.max(this.currentRep.maxHipAbsDeviation, hipDeviation);
-      }
+      this.currentRep.maxHipSag = Math.max(this.currentRep.maxHipSag, Math.max(0, -hipDeviation));
+      this.currentRep.maxHipRise = Math.max(this.currentRep.maxHipRise, Math.max(0, hipDeviation));
       this.currentRep.maxHipAbsDeviation = Math.max(this.currentRep.maxHipAbsDeviation, Math.abs(hipDeviation));
       this.currentRep.maxElbowAsymmetry = Math.max(this.currentRep.maxElbowAsymmetry, elbowAsymmetry);
+      this.currentRep.minBodyHorizontalRatio = Math.min(this.currentRep.minBodyHorizontalRatio, bodyHorizontalRatio);
     }
 
-    const feedback: FrameFeedback[] = [];
-    this.evaluateIssues(elbowAngle, hipDeviation, elbowAsymmetry, feedback);
     const repetitionsBefore = this.repetitions.length;
-    this.advance(elbowAngle, frame.timestampMs);
+    this.advance(elbowAngle, plankReady, frame.timestampMs);
     appendCompletedRepFeedback(this.repetitions, repetitionsBefore, feedback, PUSH_UP_FEEDBACK);
 
-    return this.result(feedback, true);
+    return this.result(feedback, true, elbowAngle);
   }
 
   finalize(): ExerciseSessionMetrics {
@@ -158,7 +178,7 @@ export class PushUpEngine implements ExerciseEngine {
       visible(rAnkle, cfg.minConfidence);
 
     if (!leftOk && !rightOk) {
-      return { trackingValid: false, elbowAngle: 180, hipDeviation: 0, elbowAsymmetry: 0 };
+      return { trackingValid: false, elbowAngle: 180, hipDeviation: 0, elbowAsymmetry: 0, bodyHorizontalRatio: 0 };
     }
 
     const useLeft = leftOk;
@@ -189,19 +209,23 @@ export class PushUpEngine implements ExerciseEngine {
     const perp = Math.hypot(hip.x - projX, hip.y - projY) / torsoLen;
     // Sign: hips below the line (larger y than projection in image space) = sag.
     const hipDeviation = (hip.y > projY ? -perp : perp);
+    const bodyHorizontalRatio = Math.abs(ankle.x - shoulder.x) / torsoLen;
 
-    return { trackingValid: true, elbowAngle, hipDeviation, elbowAsymmetry };
+    return { trackingValid: true, elbowAngle, hipDeviation, elbowAsymmetry, bodyHorizontalRatio };
   }
 
   private evaluateIssues(
     elbowAngle: number,
     hipDeviation: number,
     elbowAsymmetry: number,
+    bodyHorizontal: boolean,
     feedback: FrameFeedback[],
   ): void {
     const cfg = this.config;
     const codes: string[] = [];
 
+    if (!bodyHorizontal) push(codes, feedback, "body-not-horizontal", PUSH_UP_FEEDBACK);
+    if (this.phase === PushUpPhase.SETUP && !bodyHorizontal) push(codes, feedback, "plank-required", PUSH_UP_FEEDBACK);
     if (hipDeviation < -cfg.hipSagMaxDrop) push(codes, feedback, "hips-too-low", PUSH_UP_FEEDBACK);
     if (hipDeviation > cfg.hipRiseMaxRise) push(codes, feedback, "hips-too-high", PUSH_UP_FEEDBACK);
     if (elbowAsymmetry > cfg.elbowSymmetryMaxDelta) push(codes, feedback, "elbows-asymmetric", PUSH_UP_FEEDBACK);
@@ -212,7 +236,7 @@ export class PushUpEngine implements ExerciseEngine {
       push(codes, feedback, "unstable", PUSH_UP_FEEDBACK);
     }
 
-    if (codes.length === 0 && this.phase === PushUpPhase.UP) {
+    if (codes.length === 0 && (this.phase === PushUpPhase.UP || this.phase === PushUpPhase.SETUP)) {
       push(codes, feedback, "good", PUSH_UP_FEEDBACK);
     }
 
@@ -221,9 +245,9 @@ export class PushUpEngine implements ExerciseEngine {
     }
   }
 
-  private advance(elbowAngle: number, ts: number): void {
+  private advance(elbowAngle: number, plankReady: boolean, ts: number): void {
     const cfg = this.config;
-    const target = this.nextPhase(elbowAngle);
+    const target = this.nextPhase(elbowAngle, plankReady);
     if (target === this.phase) {
       this.pendingPhase = null;
       this.pendingCount = 0;
@@ -242,9 +266,11 @@ export class PushUpEngine implements ExerciseEngine {
     this.pendingCount = 0;
   }
 
-  private nextPhase(elbowAngle: number): PushUpPhase {
+  private nextPhase(elbowAngle: number, plankReady: boolean): PushUpPhase {
     const cfg = this.config;
     switch (this.phase) {
+      case PushUpPhase.SETUP:
+        return plankReady ? PushUpPhase.UP : PushUpPhase.SETUP;
       case PushUpPhase.UP:
         return elbowAngle < cfg.elbowUpMin - 10 ? PushUpPhase.DESCENDING : PushUpPhase.UP;
       case PushUpPhase.DESCENDING:
@@ -258,7 +284,7 @@ export class PushUpEngine implements ExerciseEngine {
       case PushUpPhase.COMPLETE:
         return PushUpPhase.UP;
       default:
-        return PushUpPhase.UP;
+        return PushUpPhase.SETUP;
     }
   }
 
@@ -271,8 +297,10 @@ export class PushUpEngine implements ExerciseEngine {
         startedAtMs: ts,
         completedAtMs: ts,
         minElbowAngle: elbowAngle,
-        maxHipDeviation: 0,
+        maxHipSag: 0,
+        maxHipRise: 0,
         maxHipAbsDeviation: 0,
+        minBodyHorizontalRatio: 1,
         maxElbowAsymmetry: 0,
         reachedDown: false,
         issueCodes: new Set<string>(),
@@ -301,7 +329,9 @@ export class PushUpEngine implements ExerciseEngine {
     const tempoMs = rep.completedAtMs - rep.startedAtMs;
     const bentEnough = rep.minElbowAngle <= cfg.elbowDownMax + 5;
     const elbowsAligned = rep.maxElbowAsymmetry <= cfg.elbowSymmetryMaxDelta;
-    rep.valid = bentEnough && elbowsAligned && tempoMs >= cfg.tempoFastMs;
+    const hipsAligned = rep.maxHipSag <= cfg.hipSagMaxDrop && rep.maxHipRise <= cfg.hipRiseMaxRise;
+    const stayedHorizontal = rep.minBodyHorizontalRatio >= cfg.bodyHorizontalMinRatio;
+    rep.valid = bentEnough && elbowsAligned && hipsAligned && stayedHorizontal && tempoMs >= cfg.tempoFastMs;
 
     if (rep.valid) {
       this.validReps += 1;
@@ -309,6 +339,9 @@ export class PushUpEngine implements ExerciseEngine {
       this.invalidReps += 1;
       if (!bentEnough) rep.issueCodes.add("elbows-not-bent");
       if (!elbowsAligned) rep.issueCodes.add("elbows-asymmetric");
+      if (rep.maxHipSag > cfg.hipSagMaxDrop) rep.issueCodes.add("hips-too-low");
+      if (rep.maxHipRise > cfg.hipRiseMaxRise) rep.issueCodes.add("hips-too-high");
+      if (!stayedHorizontal) rep.issueCodes.add("body-not-horizontal");
       if (tempoMs < cfg.tempoFastMs) rep.issueCodes.add("tempo-fast");
       if (tempoMs > cfg.tempoSlowMs) rep.issueCodes.add("tempo-slow");
     }
@@ -320,7 +353,7 @@ export class PushUpEngine implements ExerciseEngine {
       isValid: rep.valid,
       metrics: {
         formScore: round(scoreFromRange(rep.maxHipAbsDeviation, cfg.hipSagMaxDrop, 0, true)),
-        rangeScore: round(scoreFromRange(rep.minElbowAngle, 90, cfg.elbowDownMax, true)),
+        rangeScore: round(scoreFromRange(rep.minElbowAngle, cfg.elbowDownMax + 35, cfg.elbowDownMax, true)),
         tempoMs,
         stabilityScore: round(scoreFromRange(rep.maxHipAbsDeviation, cfg.hipSagMaxDrop, 0, true)),
         issueCodes: [...rep.issueCodes],
@@ -346,9 +379,10 @@ export class PushUpEngine implements ExerciseEngine {
 
   private abortIncompleteRep(): void {
     this.currentRep = null;
-    this.phase = PushUpPhase.UP;
+    this.phase = PushUpPhase.SETUP;
     this.pendingPhase = null;
     this.pendingCount = 0;
+    this.orientationLossFrames = 0;
   }
 
   private buildFeedbackSummary(): FeedbackSummary[] {
@@ -365,7 +399,7 @@ export class PushUpEngine implements ExerciseEngine {
     });
   }
 
-  private result(feedback: FrameFeedback[], trackingValid: boolean): ExerciseFrameResult {
+  private result(feedback: FrameFeedback[], trackingValid: boolean, elbowAngle = 180): ExerciseFrameResult {
     return {
       phase: this.phase,
       repCount: this.repCount,
@@ -373,6 +407,7 @@ export class PushUpEngine implements ExerciseEngine {
       invalidReps: this.invalidReps,
       feedback,
       trackingValid,
+      liveMetric: { label: "Sudut siku", value: round(elbowAngle) },
     };
   }
 }

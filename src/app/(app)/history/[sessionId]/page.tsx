@@ -6,6 +6,8 @@ import { Icon } from "@/components/ui/icons";
 import { getFeedbackGuidance } from "@/features/exercise-engine/feedback-guidance";
 import { getSessionDetail, getTrend, type WorkoutRepetitionRow } from "@/features/history/queries";
 import { formatDuration } from "@/features/running/metrics";
+import { SessionCoachPanel } from "@/features/ai-coach/components";
+import { getCurrentUserSessionCoach } from "@/features/ai-coach/insights";
 
 export const dynamic = "force-dynamic";
 const SEVERITY_LABEL: Record<string, string> = { info: "Saran", warning: "Perhatian", critical: "Penting" };
@@ -14,7 +16,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   const { sessionId } = await params;
   const session = await getSessionDetail(sessionId);
   if (!session) notFound();
-  const trend = await getTrend(10);
+  const [trend, aiCoach] = await Promise.all([
+    getTrend(10),
+    getCurrentUserSessionCoach(sessionId),
+  ]);
   const maxScore = Math.max(1, ...trend.map((item) => item.score));
   const score = session.final_score != null ? Math.round(Number(session.final_score)) : null;
   const totalReps = Math.max(session.total_reps, session.valid_reps + session.invalid_reps);
@@ -28,6 +33,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     </section>
 
     <section className="mt-lg grid grid-cols-2 gap-sm tablet-narrow:grid-cols-5"><SubScore label="Postur" value={session.form_score} explanation="Keselarasan tubuh" /><SubScore label="Rentang" value={session.range_score} explanation="Kedalaman gerak" /><SubScore label="Konsistensi" value={session.consistency_score} explanation="Keseragaman repetisi" /><SubScore label="Tempo" value={session.tempo_score} explanation="Kontrol kecepatan" /><SubScore label="Stabilitas" value={session.stability_score} explanation="Kontrol keseimbangan" /></section>
+
+    {aiCoach && <SessionCoachPanel insight={aiCoach} />}
 
     <div className="mt-section grid gap-lg desktop-small:grid-cols-[0.8fr_1.2fr]">
       <section className="rounded-sm bg-white p-xl"><h2 className="font-display text-3xl uppercase">Tren skor</h2><p className="mt-xs text-xs text-mute">Perbandingan hingga 10 sesi terakhir.</p>{trend.length > 1 ? <div className="mt-xl flex h-40 items-end gap-xs" role="img" aria-label="Tren skor 10 sesi terakhir">{trend.map((item, index) => <div key={`${item.date}-${index}`} className="group flex flex-1 flex-col justify-end"><div className="min-h-2 rounded-t-sm bg-sport-lime-deep transition-colors group-hover:bg-sport-black" style={{ height: `${(item.score / maxScore) * 130 + 8}px` }} title={`${item.date}: ${Math.round(item.score)}`} /></div>)}</div> : <p className="mt-lg text-sm text-mute">Selesaikan sesi berikutnya untuk melihat tren.</p>}</section>

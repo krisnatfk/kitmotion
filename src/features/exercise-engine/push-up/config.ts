@@ -1,7 +1,7 @@
 import type { ExerciseConfig } from "../core/types";
 
 export const PUSH_UP_ENGINE_KEY = "push-up";
-export const PUSH_UP_SCORING_VERSION = "cam-v1";
+export const PUSH_UP_SCORING_VERSION = "cam-v3";
 
 export interface PushUpConfig {
   /** Elbow angle (shoulder-elbow-wrist) at or below which the rep is "down". */
@@ -14,19 +14,22 @@ export interface PushUpConfig {
   hipRiseMaxRise: number;
   /** Maximum left/right elbow-angle difference when both arms are visible. */
   elbowSymmetryMaxDelta: number;
+  /** Minimum horizontal component of the shoulder-to-ankle body line (0..1). */
+  bodyHorizontalMinRatio: number;
   debounceFrames: number;
   minConfidence: number;
   tempoFastMs: number;
   tempoSlowMs: number;
 }
 
-/** Defaults mirror supabase/migrations/0003_seed.sql (push-up config). */
+/** Defaults mirror the latest active push-up scoring migration. */
 export const PUSH_UP_DEFAULT_CONFIG: PushUpConfig = {
   elbowDownMax: 90,
   elbowUpMin: 160,
   hipSagMaxDrop: 0.12,
   hipRiseMaxRise: 0.12,
   elbowSymmetryMaxDelta: 18,
+  bodyHorizontalMinRatio: 0.65,
   debounceFrames: 3,
   minConfidence: 0.5,
   tempoFastMs: 400,

@@ -5,6 +5,8 @@ export const PUSH_UP_FEEDBACK: Record<
   string,
   { severity: FeedbackSeverity; message: string }
 > = {
+  "plank-required": { severity: "warning", message: "Ambil posisi plank atas menyamping dan luruskan siku sebelum memulai push-up." },
+  "body-not-horizontal": { severity: "critical", message: "Tubuh belum sejajar lantai. Pastikan bahu hingga kaki terlihat memanjang menyamping." },
   "hips-too-low": { severity: "warning", message: "Pinggul turun. Kencangkan perut dan angkat pinggul hingga bahu, pinggul, dan lutut segaris." },
   "hips-too-high": { severity: "warning", message: "Pinggul terlalu tinggi. Turunkan pinggul hingga tubuh membentuk garis lurus." },
   "elbows-not-bent": { severity: "warning", message: "Siku belum cukup menekuk. Turunkan dada dengan kontrol hingga siku mendekati 90 derajat." },

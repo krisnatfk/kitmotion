@@ -15,7 +15,8 @@ function jackFrame(
   legOpen: number,
   tsMs: number,
   visibility = 1,
-  wristY = 0.2,
+  wristY?: number,
+  rightWristOffset = 0,
 ): PoseFrame {
   const shoulderWidth = 0.2;
   const hipWidth = 0.16;
@@ -32,9 +33,16 @@ function jackFrame(
   set(POSE_LANDMARKS.RIGHT_SHOULDER, cx + shoulderWidth / 2, 0.3);
   set(POSE_LANDMARKS.LEFT_HIP, cx - hipWidth / 2, 0.55);
   set(POSE_LANDMARKS.RIGHT_HIP, cx + hipWidth / 2, 0.55);
+  const resolvedWristY = wristY ?? (
+    armOpen >= JUMPING_JACK_DEFAULT_CONFIG.armOpenMinRatio
+      ? 0.04
+      : armOpen <= 1.05
+        ? 0.55
+        : 0.18
+  );
   // Wrist spread = armOpen * shoulderWidth
-  set(POSE_LANDMARKS.LEFT_WRIST, cx - (armOpen * shoulderWidth) / 2, wristY);
-  set(POSE_LANDMARKS.RIGHT_WRIST, cx + (armOpen * shoulderWidth) / 2, wristY);
+  set(POSE_LANDMARKS.LEFT_WRIST, cx - (armOpen * shoulderWidth) / 2, resolvedWristY);
+  set(POSE_LANDMARKS.RIGHT_WRIST, cx + (armOpen * shoulderWidth) / 2, resolvedWristY + rightWristOffset);
   // Ankle spread = legOpen * hipWidth
   set(POSE_LANDMARKS.LEFT_ANKLE, cx - (legOpen * hipWidth) / 2, 0.9);
   set(POSE_LANDMARKS.RIGHT_ANKLE, cx + (legOpen * hipWidth) / 2, 0.9);
@@ -123,6 +131,51 @@ describe("JumpingJackEngine", () => {
       ts += 100;
     }
     expect(engine.finalize().totalReps).toBe(0);
+  });
+
+  it("marks an asymmetric full cycle invalid", () => {
+    const engine = new JumpingJackEngine();
+    engine.initialize({});
+    const cfg = JUMPING_JACK_DEFAULT_CONFIG;
+    let ts = 0;
+    const confirm = (arm: number, leg: number, rightWristOffset = 0) => {
+      for (let index = 0; index < cfg.debounceFrames + 1; index += 1) {
+        engine.processFrame(jackFrame(arm, leg, ts, 1, undefined, rightWristOffset));
+        ts += 100;
+      }
+    };
+    confirm(1, 1);
+    confirm(cfg.armOpenMinRatio - 0.2, cfg.legOpenMinRatio - 0.1);
+    confirm(cfg.armOpenMinRatio, cfg.legOpenMinRatio, 0.05);
+    confirm(cfg.armOpenMinRatio - 0.2, cfg.legOpenMinRatio - 0.1);
+    confirm(1, 1);
+    const metrics = engine.finalize();
+    expect(metrics.totalReps).toBe(1);
+    expect(metrics.validReps).toBe(0);
+    expect(metrics.invalidReps).toBe(1);
+    expect(metrics.repetitions[0]?.metrics.issueCodes).toContain("asymmetry");
+  });
+
+  it("marks a badly delayed arm-leg cycle invalid", () => {
+    const engine = new JumpingJackEngine();
+    engine.initialize({});
+    const cfg = JUMPING_JACK_DEFAULT_CONFIG;
+    let ts = 0;
+    const frames = (arm: number, leg: number, count: number) => {
+      for (let index = 0; index < count; index += 1) {
+        engine.processFrame(jackFrame(arm, leg, ts));
+        ts += 100;
+      }
+    };
+    frames(1, 1, cfg.debounceFrames + 1);
+    frames(cfg.armOpenMinRatio, 1, 10);
+    frames(cfg.armOpenMinRatio, cfg.legOpenMinRatio, cfg.debounceFrames + 1);
+    frames(cfg.armOpenMinRatio - 0.2, cfg.legOpenMinRatio - 0.1, cfg.debounceFrames + 1);
+    frames(1, 1, cfg.debounceFrames + 1);
+    const metrics = engine.finalize();
+    expect(metrics.totalReps).toBe(1);
+    expect(metrics.validReps).toBe(0);
+    expect(metrics.repetitions[0]?.metrics.issueCodes).toContain("arms-legs-out-of-sync");
   });
 
   it("cancels an incomplete cycle when tracking is lost", () => {

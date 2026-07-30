@@ -9,7 +9,7 @@ import type {
   RepRecord,
   FeedbackSummary,
 } from "../core/types";
-import { scoreFromRange } from "../core/angles";
+import { angleBetweenDegrees, scoreFromRange } from "../core/angles";
 import { POSE_LANDMARKS } from "../core/landmarks";
 import { JumpingJackPhase } from "./phases";
 import { JUMPING_JACK_FEEDBACK } from "./feedback";
@@ -23,9 +23,13 @@ interface JackRep {
   startedAtMs: number;
   completedAtMs: number;
   maxArmSpread: number;
+  maxArmAngle: number;
+  maxArmHeight: number;
   maxLegSpread: number;
   maxAsymmetry: number;
   maxCoordinationDelta: number;
+  coordinationTotal: number;
+  coordinationSamples: number;
   reachedOpen: boolean;
   issueCodes: Set<string>;
   valid: boolean;
@@ -75,7 +79,7 @@ export class JumpingJackEngine implements ExerciseEngine {
     if (this.startMs === 0) this.startMs = frame.timestampMs;
     this.lastFrameMs = frame.timestampMs;
 
-    const { trackingValid, armSpread, armHeight, legSpread, asymmetry, coordinationDelta } = this.readKinematics(
+    const { trackingValid, armSpread, armAngle, armHeight, legSpread, asymmetry, coordinationDelta } = this.readKinematics(
       frame.landmarks,
     );
 
@@ -86,15 +90,19 @@ export class JumpingJackEngine implements ExerciseEngine {
 
     if (this.currentRep) {
       this.currentRep.maxArmSpread = Math.max(this.currentRep.maxArmSpread, armSpread);
+      this.currentRep.maxArmAngle = Math.max(this.currentRep.maxArmAngle, armAngle);
+      this.currentRep.maxArmHeight = Math.max(this.currentRep.maxArmHeight, armHeight);
       this.currentRep.maxLegSpread = Math.max(this.currentRep.maxLegSpread, legSpread);
       this.currentRep.maxAsymmetry = Math.max(this.currentRep.maxAsymmetry, asymmetry);
       this.currentRep.maxCoordinationDelta = Math.max(this.currentRep.maxCoordinationDelta, coordinationDelta);
+      this.currentRep.coordinationTotal += coordinationDelta;
+      this.currentRep.coordinationSamples += 1;
     }
 
     const feedback: FrameFeedback[] = [];
-    this.evaluateIssues(armSpread, armHeight, legSpread, asymmetry, coordinationDelta, feedback);
+    this.evaluateIssues(armAngle, armHeight, legSpread, asymmetry, coordinationDelta, feedback);
     const repetitionsBefore = this.repetitions.length;
-    this.advance(armSpread, armHeight, legSpread, frame.timestampMs);
+    this.advance(armAngle, armHeight, legSpread, frame.timestampMs);
     appendCompletedRepFeedback(this.repetitions, repetitionsBefore, feedback, JUMPING_JACK_FEEDBACK);
 
     return this.result(feedback, true);
@@ -152,7 +160,7 @@ export class JumpingJackEngine implements ExerciseEngine {
       visible(rWrist, cfg.minConfidence);
 
     if (!ok) {
-      return { trackingValid: false, armSpread: 0, armHeight: 0, legSpread: 0, asymmetry: 0, coordinationDelta: 0 };
+      return { trackingValid: false, armSpread: 0, armAngle: 0, armHeight: 0, legSpread: 0, asymmetry: 0, coordinationDelta: 0 };
     }
 
     const shoulderWidth = Math.abs(lShoulder!.x - rShoulder!.x) || 1;
@@ -160,6 +168,9 @@ export class JumpingJackEngine implements ExerciseEngine {
 
     const armSpread = Math.abs(lWrist!.x - rWrist!.x) / shoulderWidth;
     const legSpread = Math.abs(lAnkle!.x - rAnkle!.x) / hipWidth;
+    const leftArmAngle = angleBetweenDegrees(lHip!, lShoulder!, lWrist!);
+    const rightArmAngle = angleBetweenDegrees(rHip!, rShoulder!, rWrist!);
+    const armAngle = Math.min(leftArmAngle, rightArmAngle);
     const shoulderY = (lShoulder!.y + rShoulder!.y) / 2;
     const hipY = (lHip!.y + rHip!.y) / 2;
     const wristY = (lWrist!.y + rWrist!.y) / 2;
@@ -167,16 +178,25 @@ export class JumpingJackEngine implements ExerciseEngine {
     const armHeight = (shoulderY - wristY) / torsoHeight;
 
     // Asymmetry: difference in wrist height (normalized to shoulder width).
-    const asymmetry = Math.abs(lWrist!.y - rWrist!.y) / shoulderWidth;
-    const armProgress = clamp01((armSpread - 1) / Math.max(0.01, cfg.armOpenMinRatio - 1));
-    const legProgress = clamp01((legSpread - 1) / Math.max(0.01, cfg.legOpenMinRatio - 1));
+    const asymmetry = Math.max(
+      Math.abs(lWrist!.y - rWrist!.y) / shoulderWidth,
+      Math.abs(leftArmAngle - rightArmAngle) / 180,
+    );
+    const armProgress = clamp01(
+      (armAngle - cfg.armClosedMaxAngle) /
+      Math.max(1, cfg.armOpenMinAngle - cfg.armClosedMaxAngle),
+    );
+    const legProgress = clamp01(
+      (legSpread - cfg.legClosedMaxRatio) /
+      Math.max(0.01, cfg.legOpenMinRatio - cfg.legClosedMaxRatio),
+    );
     const coordinationDelta = Math.abs(armProgress - legProgress);
 
-    return { trackingValid: true, armSpread, armHeight, legSpread, asymmetry, coordinationDelta };
+    return { trackingValid: true, armSpread, armAngle, armHeight, legSpread, asymmetry, coordinationDelta };
   }
 
   private evaluateIssues(
-    armSpread: number,
+    armAngle: number,
     armHeight: number,
     legSpread: number,
     asymmetry: number,
@@ -187,7 +207,7 @@ export class JumpingJackEngine implements ExerciseEngine {
     const codes: string[] = [];
 
     if (this.phase === JumpingJackPhase.OPEN || this.phase === JumpingJackPhase.OPENING) {
-      if (armSpread < cfg.armOpenMinRatio || armHeight < cfg.armHeightMinRatio) push(codes, feedback, "arms-too-low", JUMPING_JACK_FEEDBACK);
+      if (armAngle < cfg.armOpenMinAngle || armHeight < cfg.armHeightMinRatio) push(codes, feedback, "arms-too-low", JUMPING_JACK_FEEDBACK);
       if (legSpread < cfg.legOpenMinRatio) push(codes, feedback, "legs-too-narrow", JUMPING_JACK_FEEDBACK);
     }
     if (asymmetry > cfg.symmetryMaxDelta) push(codes, feedback, "asymmetry", JUMPING_JACK_FEEDBACK);
@@ -202,11 +222,10 @@ export class JumpingJackEngine implements ExerciseEngine {
     }
   }
 
-  private advance(armSpread: number, armHeight: number, legSpread: number, ts: number): void {
+  private advance(armAngle: number, armHeight: number, legSpread: number, ts: number): void {
     const cfg = this.config;
-    const isOpen = armSpread >= cfg.armOpenMinRatio && armHeight >= cfg.armHeightMinRatio && legSpread >= cfg.legOpenMinRatio;
-    const isClosed =
-      armSpread < cfg.armOpenMinRatio * 0.85 && legSpread < cfg.legOpenMinRatio * 0.85;
+    const isOpen = armAngle >= cfg.armOpenMinAngle && armHeight >= cfg.armHeightMinRatio && legSpread >= cfg.legOpenMinRatio;
+    const isClosed = armAngle <= cfg.armClosedMaxAngle && legSpread <= cfg.legClosedMaxRatio;
 
     const target = this.nextPhase(isOpen, isClosed);
     if (target === this.phase) {
@@ -256,9 +275,13 @@ export class JumpingJackEngine implements ExerciseEngine {
         startedAtMs: ts,
         completedAtMs: ts,
         maxArmSpread: 0,
+        maxArmAngle: 0,
+        maxArmHeight: 0,
         maxLegSpread: 0,
         maxAsymmetry: 0,
         maxCoordinationDelta: 0,
+        coordinationTotal: 0,
+        coordinationSamples: 0,
         reachedOpen: false,
         issueCodes: new Set<string>(),
         valid: false,
@@ -289,17 +312,26 @@ export class JumpingJackEngine implements ExerciseEngine {
     const cfg = this.config;
     const tempoMs = rep.completedAtMs - rep.startedAtMs;
     const reachedOpen =
-      rep.maxArmSpread >= cfg.armOpenMinRatio && rep.maxLegSpread >= cfg.legOpenMinRatio;
-    rep.valid = reachedOpen && tempoMs >= cfg.tempoFastMs;
+      rep.maxArmAngle >= cfg.armOpenMinAngle
+      && rep.maxArmHeight >= cfg.armHeightMinRatio
+      && rep.maxLegSpread >= cfg.legOpenMinRatio;
+    const symmetrical = rep.maxAsymmetry <= cfg.symmetryMaxDelta;
+    const averageCoordinationDelta = rep.coordinationSamples > 0
+      ? rep.coordinationTotal / rep.coordinationSamples
+      : 1;
+    const coordinated = averageCoordinationDelta <= cfg.coordinationMaxDelta;
+    rep.valid = reachedOpen && symmetrical && coordinated && tempoMs >= cfg.tempoFastMs;
 
     if (rep.valid) {
       this.validReps += 1;
     } else {
       this.invalidReps += 1;
       if (!reachedOpen) {
-        if (rep.maxArmSpread < cfg.armOpenMinRatio) rep.issueCodes.add("arms-too-low");
+        if (rep.maxArmAngle < cfg.armOpenMinAngle || rep.maxArmHeight < cfg.armHeightMinRatio) rep.issueCodes.add("arms-too-low");
         if (rep.maxLegSpread < cfg.legOpenMinRatio) rep.issueCodes.add("legs-too-narrow");
       }
+      if (!symmetrical) rep.issueCodes.add("asymmetry");
+      if (!coordinated) rep.issueCodes.add("arms-legs-out-of-sync");
       if (tempoMs < cfg.tempoFastMs) rep.issueCodes.add("tempo-fast");
       if (tempoMs > cfg.tempoSlowMs) rep.issueCodes.add("tempo-slow");
     }
@@ -312,7 +344,7 @@ export class JumpingJackEngine implements ExerciseEngine {
       metrics: {
         formScore: round(scoreFromRange(rep.maxAsymmetry, cfg.symmetryMaxDelta, 0, true)),
         rangeScore: round(
-          (scoreFromRange(rep.maxArmSpread, 1, cfg.armOpenMinRatio) +
+          (scoreFromRange(rep.maxArmAngle, 90, cfg.armOpenMinAngle) +
             scoreFromRange(rep.maxLegSpread, 1, cfg.legOpenMinRatio)) /
             2,
         ),

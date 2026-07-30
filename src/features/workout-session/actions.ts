@@ -6,6 +6,8 @@ import { computeFinalScore, SCORING_VERSION } from "@/features/scoring/scoring";
 import { applySessionRewards } from "@/features/gamification/apply";
 import { applyMilestoneAttempt, type MilestoneAttemptResult } from "@/features/gamification/milestones";
 import type { Json } from "@/types/database.types";
+import { getSessionCoachForUser } from "@/features/ai-coach/insights";
+import type { SessionCoachInsight } from "@/features/ai-coach/types";
 import { finalizeSessionSchema, type FinalizeSessionInput } from "./schema";
 
 export type FinalizeResult = {
@@ -17,6 +19,7 @@ export type FinalizeResult = {
   newBadges: { code: string; name: string }[];
   challengesCompleted: { code: string; title: string }[];
   milestone: MilestoneAttemptResult | null;
+  aiCoach: SessionCoachInsight | null;
 };
 
 export type FinalizeError = { error: string };
@@ -120,6 +123,7 @@ export async function finalizeSession(
       .select("current_level")
       .eq("user_id", user.id)
       .single();
+    const aiCoach = await getSessionCoachForUser(existing.id, user.id);
     return {
       sessionId: existing.id,
       finalScore: Number(existing.final_score ?? 0),
@@ -129,6 +133,7 @@ export async function finalizeSession(
       newBadges: [],
       challengesCompleted: [],
       milestone: null,
+      aiCoach,
     };
   }
 
@@ -254,6 +259,8 @@ export async function finalizeSession(
   revalidatePath("/history");
   revalidatePath("/dashboard");
 
+  const aiCoach = await getSessionCoachForUser(sessionId, user.id);
+
   return {
     sessionId,
     finalScore: score.finalScore,
@@ -263,5 +270,6 @@ export async function finalizeSession(
     newBadges: rewards.newBadges,
     challengesCompleted: rewards.challengesCompleted,
     milestone,
+    aiCoach,
   };
 }

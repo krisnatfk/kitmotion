@@ -345,6 +345,92 @@ export interface Database {
         ];
       };
 
+      ai_insights: {
+        Row: {
+          id: string;
+          owner_user_id: string;
+          kind: string;
+          cache_key: string;
+          session_id: string | null;
+          classroom_id: string | null;
+          content: Json;
+          source: string;
+          provider: string | null;
+          model: string | null;
+          prompt_version: string;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_user_id: string;
+          kind: string;
+          cache_key: string;
+          session_id?: string | null;
+          classroom_id?: string | null;
+          content: Json;
+          source?: string;
+          provider?: string | null;
+          model?: string | null;
+          prompt_version: string;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_insights"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "ai_insights_owner_user_id_fkey"; columns: ["owner_user_id"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "ai_insights_session_id_fkey"; columns: ["session_id"]; referencedRelation: "workout_sessions"; referencedColumns: ["id"] },
+          { foreignKeyName: "ai_insights_classroom_id_fkey"; columns: ["classroom_id"]; referencedRelation: "classrooms"; referencedColumns: ["id"] },
+        ];
+      };
+
+      ai_providers: {
+        Row: {
+          id: string;
+          name: string;
+          base_url: string;
+          api_key_encrypted: string;
+          model: string;
+          response_format: "json_schema" | "json_object";
+          priority: number;
+          is_active: boolean;
+          health_status: "unchecked" | "healthy" | "degraded" | "unhealthy";
+          consecutive_failures: number;
+          last_checked_at: string | null;
+          last_success_at: string | null;
+          last_latency_ms: number | null;
+          last_error: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          base_url: string;
+          api_key_encrypted: string;
+          model: string;
+          response_format?: "json_schema" | "json_object";
+          priority?: number;
+          is_active?: boolean;
+          health_status?: "unchecked" | "healthy" | "degraded" | "unhealthy";
+          consecutive_failures?: number;
+          last_checked_at?: string | null;
+          last_success_at?: string | null;
+          last_latency_ms?: number | null;
+          last_error?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_providers"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "ai_providers_created_by_fkey"; columns: ["created_by"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
+
       user_progress: {
         Row: {
           user_id: string;

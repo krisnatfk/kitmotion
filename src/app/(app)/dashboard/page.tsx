@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { getCurrentProfile, getCurrentProgress, getDashboardGamification } from "@/features/profile/queries";
 import { listExercises } from "@/features/exercises/queries";
+import { getDailyRecommendation } from "@/features/ai-coach/insights";
 import { withTimeoutFallback } from "@/lib/async";
 
 const EMPTY_GAMIFICATION = { badges: [], challenges: [], milestone: null };
@@ -13,17 +14,21 @@ const EMPTY_GAMIFICATION = { badges: [], challenges: [], milestone: null };
 export default async function DashboardPage() {
   // Authentication is enforced by middleware. Optional dashboard data gets a
   // deadline so one unavailable Supabase table cannot blank the entire route.
-  const [profile, progress, exercises, gamification] = await Promise.all([
+  const [profile, progress, exercises, gamification, dailyRecommendation] = await Promise.all([
     withTimeoutFallback(getCurrentProfile(), null),
     withTimeoutFallback(getCurrentProgress(), null),
     withTimeoutFallback(listExercises(), []),
     withTimeoutFallback(getDashboardGamification(), EMPTY_GAMIFICATION),
+    withTimeoutFallback(getDailyRecommendation(), null, 12_000),
   ]);
   const totalXp = progress?.total_xp ?? 0;
   const level = progress?.current_level ?? 1;
   const streak = progress?.current_streak ?? 0;
   const sessions = progress?.total_sessions ?? 0;
-  const featured = exercises[0];
+  const featured = exercises.find((exercise) => exercise.slug === dailyRecommendation?.exerciseSlug) ?? exercises[0];
+  const targetLabel = dailyRecommendation?.targetSeconds
+    ? `${dailyRecommendation.targetSeconds} detik`
+    : `${dailyRecommendation?.targetReps ?? featured?.default_target_reps ?? 12} repetisi`;
   const databaseReady = Boolean(profile || progress || exercises.length > 0);
   if (profile?.role === "teacher") redirect("/teacher");
 
@@ -81,8 +86,8 @@ export default async function DashboardPage() {
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-transparent" />
           <div className="relative z-10 flex h-full min-h-[420px] max-w-lg flex-col justify-between p-xl tablet-narrow:min-h-[470px] tablet-narrow:p-section">
-            <p className="eyebrow text-sport-lime">Rekomendasi hari ini</p>
-            <div><p className="text-sm uppercase tracking-widest text-white/55">{featured?.difficulty ?? "Pemula"} · {featured?.default_target_reps ?? 12} repetisi</p><h2 className="mt-md font-display text-6xl uppercase leading-[0.85] tablet-narrow:text-7xl">{featured?.name ?? "Full Body Starter"}</h2><p className="mt-lg max-w-md text-sm leading-relaxed text-white/65">Aktifkan seluruh tubuh, ikuti panduan pose real-time, dan mulai bangun konsistensi latihanmu.</p><ButtonLink href={featured ? `/exercises/${featured.slug}` : "/exercises"} className="mt-xl bg-sport-lime px-xxl text-sport-black hover:bg-white">Mulai latihan <Icon name="arrow" className="h-5 w-5" /></ButtonLink></div>
+            <p className="eyebrow text-sport-lime">{dailyRecommendation?.source === "ai" ? "Rekomendasi AI hari ini" : "Rekomendasi hari ini"}</p>
+            <div><p className="text-sm uppercase tracking-widest text-white/55">{featured?.difficulty ?? "Pemula"} · {targetLabel}</p><h2 className="mt-md font-display text-6xl uppercase leading-[0.85] tablet-narrow:text-7xl">{featured?.name ?? "Full Body Starter"}</h2>{dailyRecommendation?.headline && <p className="mt-lg text-xs font-bold uppercase tracking-widest text-sport-lime">{dailyRecommendation.headline}</p>}<p className={`${dailyRecommendation?.headline ? "mt-sm" : "mt-lg"} max-w-md text-sm leading-relaxed text-white/65`}>{dailyRecommendation?.reason ?? "Aktifkan seluruh tubuh, ikuti panduan pose real-time, dan mulai bangun konsistensi latihanmu."}</p>{dailyRecommendation?.focus && <p className="mt-md flex max-w-md items-start gap-sm text-xs leading-relaxed text-white/80"><Icon name="target" className="mt-0.5 h-4 w-4 shrink-0 text-sport-lime" />{dailyRecommendation.focus}</p>}<ButtonLink href={featured ? `/exercises/${featured.slug}` : "/exercises"} className="mt-xl bg-sport-lime px-xxl text-sport-black hover:bg-white">Mulai latihan <Icon name="arrow" className="h-5 w-5" /></ButtonLink></div>
           </div>
         </div>
 

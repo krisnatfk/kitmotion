@@ -16,6 +16,14 @@ const ACTION_LABELS: Record<string, string> = {
   "badge.update": "Memperbarui badge",
   "challenge.create": "Membuat challenge",
   "challenge.update": "Memperbarui challenge",
+  "ai_provider.create": "Menambahkan provider AI",
+  "ai_provider.update": "Memperbarui provider AI",
+  "ai_provider.test": "Menguji koneksi provider AI",
+  "ai_provider.feature_test": "Menguji fitur provider AI",
+  "ai_provider.enable": "Mengaktifkan provider AI",
+  "ai_provider.disable": "Menonaktifkan provider AI",
+  "ai_provider.delete": "Menghapus provider AI",
+  "ai_provider.import_env": "Mengimpor provider AI dari ENV",
 };
 
 export default async function AdminAuditPage() {

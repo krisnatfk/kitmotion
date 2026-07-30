@@ -23,7 +23,7 @@ export const env = {
 
   mediapipeModelPath:
     read(process.env.NEXT_PUBLIC_MEDIAPIPE_MODEL_PATH) ||
-    "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+    "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
   mediapipeWasmPath:
     read(process.env.NEXT_PUBLIC_MEDIAPIPE_WASM_PATH) ||
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm",

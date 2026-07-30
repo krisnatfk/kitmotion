@@ -19,7 +19,16 @@ describe("AI server configuration", () => {
       baseUrl: "http://localhost:11434/v1",
       model: "my-local-model",
       timeoutMs: 30000,
+      responseFormat: "json_schema",
     });
+  });
+
+  it("supports providers that only expose JSON object mode", () => {
+    expect(getAIConfig({
+      AI_BASE_URL: "https://provider.example/v1",
+      AI_MODEL: "deepseek-model",
+      AI_RESPONSE_FORMAT: "json_object",
+    })?.responseFormat).toBe("json_object");
   });
 
   it("rejects insecure remote endpoints", () => {

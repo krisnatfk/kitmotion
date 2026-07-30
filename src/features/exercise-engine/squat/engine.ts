@@ -10,7 +10,7 @@ import type {
   RepMetrics,
   FeedbackSummary,
 } from "../core/types";
-import { angleBetweenDegrees, leanFromVerticalDegrees, midpoint, scoreFromRange } from "../core/angles";
+import { angleBetweenDegrees, leanFromVerticalDegrees, scoreFromRange } from "../core/angles";
 import { POSE_LANDMARKS } from "../core/landmarks";
 import { SquatPhase } from "./phases";
 import { SQUAT_FEEDBACK } from "./feedback";
@@ -24,6 +24,7 @@ interface SquatRep {
   startedAtMs: number;
   completedAtMs: number;
   minKneeAngle: number; // depth reached
+  minHipAngle: number;
   maxLean: number;
   maxCavein: number;
   issueCodes: Set<string>;
@@ -53,6 +54,9 @@ export class SquatEngine implements ExerciseEngine {
   private pendingCount = 0;
   private startMs = 0;
   private lastFrameMs = 0;
+  private readyConfirmed = false;
+  private readyFrames = 0;
+  private trackingLossFrames = 0;
 
   initialize(config: ExerciseConfig): void {
     this.config = parseSquatConfig(config);
@@ -71,24 +75,37 @@ export class SquatEngine implements ExerciseEngine {
     this.pendingCount = 0;
     this.startMs = 0;
     this.lastFrameMs = 0;
+    this.readyConfirmed = false;
+    this.readyFrames = 0;
+    this.trackingLossFrames = 0;
   }
 
   processFrame(frame: PoseFrame): ExerciseFrameResult {
     if (this.startMs === 0) this.startMs = frame.timestampMs;
     this.lastFrameMs = frame.timestampMs;
 
-    const { trackingValid, kneeAngle, lean, cavein } = this.readKinematics(
+    const { trackingValid, kneeAngle, hipAngle, lean, cavein } = this.readKinematics(
       frame.landmarks,
     );
 
     if (!trackingValid) {
-      // Pause scoring while body tracking is poor (FR-044/064). Keep phase.
+      this.trackingLossFrames += 1;
+      if (this.trackingLossFrames >= this.config.debounceFrames) this.abortIncompleteRep();
       return this.result([], false, kneeAngle);
+    }
+    this.trackingLossFrames = 0;
+
+    if (!this.readyConfirmed && this.phase === SquatPhase.READY) {
+      const standing = kneeAngle >= this.config.kneeStandMin && hipAngle >= 155;
+      this.readyFrames = standing ? this.readyFrames + 1 : 0;
+      if (this.readyFrames >= this.config.debounceFrames) this.readyConfirmed = true;
+      return this.result([], true, kneeAngle);
     }
 
     // Track per-rep kinematic extremes.
     if (this.currentRep) {
       this.currentRep.minKneeAngle = Math.min(this.currentRep.minKneeAngle, kneeAngle);
+      this.currentRep.minHipAngle = Math.min(this.currentRep.minHipAngle, hipAngle);
       this.currentRep.maxLean = Math.max(this.currentRep.maxLean, lean);
       this.currentRep.maxCavein = Math.max(this.currentRep.maxCavein, cavein);
     }
@@ -162,7 +179,7 @@ export class SquatEngine implements ExerciseEngine {
       visible(rAnkle, cfg.minConfidence);
 
     if (!leftOk && !rightOk) {
-      return { trackingValid: false, kneeAngle: 180, lean: 0, cavein: 0 };
+      return { trackingValid: false, kneeAngle: 180, hipAngle: 180, lean: 0, cavein: 0 };
     }
 
     // Prefer the complete left side; fall back to the right.
@@ -174,16 +191,15 @@ export class SquatEngine implements ExerciseEngine {
 
     const kneeAngle = angleBetweenDegrees(hip, knee, ankle);
 
-    const shoulderMid = midpoint(shoulder, hip);
-    const hipMid = midpoint(hip, useLeft ? (rHip ?? hip) : (lHip ?? hip));
-    const lean = leanFromVerticalDegrees(shoulderMid, hipMid);
+    const hipAngle = angleBetweenDegrees(shoulder, hip, knee);
+    const lean = leanFromVerticalDegrees(shoulder, hip);
 
     // Knee cave-in: horizontal offset of knee from ankle, normalized by hip width.
     const otherHip = useLeft ? rHip : lHip;
     const hipWidth = otherHip ? Math.abs(hip.x - otherHip.x) || 1 : 1;
     const cavein = Math.abs((knee.x - ankle.x) / hipWidth);
 
-    return { trackingValid: true, kneeAngle, lean, cavein };
+    return { trackingValid: true, kneeAngle, hipAngle, lean, cavein };
   }
 
   private evaluateIssues(
@@ -270,6 +286,7 @@ export class SquatEngine implements ExerciseEngine {
         startedAtMs: ts,
         completedAtMs: ts,
         minKneeAngle: kneeAngle,
+        minHipAngle: 180,
         maxLean: 0,
         maxCavein: 0,
         issueCodes: new Set<string>(),
@@ -292,13 +309,16 @@ export class SquatEngine implements ExerciseEngine {
     const cfg = this.config;
     const tempoMs = rep.completedAtMs - rep.startedAtMs;
     const deepEnough = rep.minKneeAngle <= cfg.kneeBottomMax + 5;
-    rep.valid = deepEnough && tempoMs >= cfg.tempoFastMs;
+    const hipBentEnough = rep.minHipAngle <= cfg.hipBottomMax;
+    const torsoControlled = rep.maxLean <= cfg.torsoLeanValidMax;
+    rep.valid = deepEnough && hipBentEnough && torsoControlled && tempoMs >= cfg.tempoFastMs;
 
     if (rep.valid) {
       this.validReps += 1;
     } else {
       this.invalidReps += 1;
-      if (!deepEnough) rep.issueCodes.add("shallow-depth");
+      if (!deepEnough || !hipBentEnough) rep.issueCodes.add("shallow-depth");
+      if (!torsoControlled) rep.issueCodes.add("back-bend");
       if (tempoMs < cfg.tempoFastMs) rep.issueCodes.add("tempo-fast");
       if (tempoMs > cfg.tempoSlowMs) rep.issueCodes.add("tempo-slow");
     }
@@ -327,6 +347,15 @@ export class SquatEngine implements ExerciseEngine {
     }
 
     this.currentRep = null;
+  }
+
+  private abortIncompleteRep(): void {
+    this.currentRep = null;
+    this.phase = SquatPhase.READY;
+    this.pendingPhase = null;
+    this.pendingCount = 0;
+    this.readyConfirmed = false;
+    this.readyFrames = 0;
   }
 
   private metricsFor(rep: SquatRep, tempoMs: number): RepMetrics {
