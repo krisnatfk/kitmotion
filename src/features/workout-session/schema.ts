@@ -36,6 +36,8 @@ export const finalizeSessionSchema = z.object({
   durationSeconds: z.number().int().nonnegative().max(24 * 60 * 60),
   targetReps: z.number().int().nonnegative().nullable(),
   targetSeconds: z.number().int().nonnegative().nullable(),
+  milestoneLevel: z.number().int().positive().multipleOf(10).nullable().default(null),
+  trackingLossCount: z.number().int().nonnegative().default(0),
   totalReps: z.number().int().nonnegative(),
   validReps: z.number().int().nonnegative(),
   invalidReps: z.number().int().nonnegative(),

@@ -7,6 +7,10 @@ import { Icon } from "@/components/ui/icons";
 import { getExerciseVisual } from "@/features/exercises/presentation";
 import { getActiveVersion, getExerciseBySlug } from "@/features/exercises/queries";
 import { TargetSelector } from "@/features/exercises/target-selector";
+import { getExerciseTutorial } from "@/features/exercises/tutorials";
+import { targetRepsForLevel } from "@/features/exercises/difficulty";
+import { getCurrentProgress } from "@/features/profile/queries";
+import { getSupabaseServer } from "@/lib/supabase/server";
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   beginner: "Pemula",
@@ -23,16 +27,45 @@ const COACH_STEPS = [
 
 export default async function ExerciseDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ milestone?: string }>;
 }) {
   const { slug } = await params;
+  const query = await searchParams;
+  const parsedMilestone = Number.parseInt(query.milestone ?? "", 10);
+  const milestoneLevel = Number.isInteger(parsedMilestone) && parsedMilestone >= 10 && parsedMilestone % 10 === 0 ? parsedMilestone : null;
   const exercise = await getExerciseBySlug(slug);
 
   if (!exercise) notFound();
 
   const version = await getActiveVersion(exercise.id);
   const visual = getExerciseVisual(exercise.slug);
+  const fallbackTutorial = getExerciseTutorial(exercise.slug);
+  const supabase = await getSupabaseServer();
+  const [milestoneResult, tutorialResult, progress] = await Promise.all([
+    milestoneLevel == null
+      ? Promise.resolve({ data: null })
+      : supabase.from("milestone_challenges")
+        .select("target_reps, minimum_score, max_form_errors, require_tracking_continuity")
+        .eq("milestone_level", milestoneLevel)
+        .eq("exercise_id", exercise.id)
+        .eq("is_active", true)
+        .maybeSingle(),
+    supabase.from("exercise_tutorials").select("start_position, steps, common_mistakes, safety_tips").eq("exercise_id", exercise.id).maybeSingle(),
+    getCurrentProgress(),
+  ]);
+  const milestoneChallenge = milestoneResult.data;
+  const tutorialRow = tutorialResult.data;
+  const tutorial = tutorialRow ? {
+    startPosition: tutorialRow.start_position,
+    steps: stringArray(tutorialRow.steps, fallbackTutorial.steps),
+    mistakes: stringArray(tutorialRow.common_mistakes, fallbackTutorial.mistakes),
+    safety: stringArray(tutorialRow.safety_tips, fallbackTutorial.safety),
+  } : fallbackTutorial;
+  const levelTargetReps = targetRepsForLevel(exercise.default_target_reps, progress?.current_level ?? 1);
+  const displayedTargetReps = milestoneChallenge?.target_reps ?? levelTargetReps;
 
   return (
     <>
@@ -64,7 +97,7 @@ export default async function ExerciseDetailPage({
             </p>
               <div className="mt-xxl flex flex-col gap-lg mobile-landscape:flex-row mobile-landscape:items-center">
                 <ButtonLink
-                  href={`/workout/${exercise.slug}`}
+                  href={`/workout/${exercise.slug}?tutorial=1${milestoneLevel ? `&milestone=${milestoneLevel}` : ""}`}
                   className="w-full bg-sport-lime px-xxl text-sport-black hover:bg-white mobile-landscape:w-auto"
                 >
                   <Icon name="play" className="h-5 w-5" />
@@ -72,10 +105,10 @@ export default async function ExerciseDetailPage({
                 </ButtonLink>
                 <div className="flex items-center gap-md border-white/15 mobile-landscape:border-l mobile-landscape:pl-lg">
                   <strong className="font-display text-4xl leading-none text-white">
-                    {exercise.default_target_reps ?? exercise.default_target_seconds ?? "—"}
+                    {displayedTargetReps ?? exercise.default_target_seconds ?? "—"}
                   </strong>
                   <span className="max-w-20 text-[10px] font-bold uppercase leading-relaxed tracking-[0.15em] text-white/45">
-                    {exercise.default_target_reps ? "Target repetisi" : "Target detik"}
+                    {displayedTargetReps ? "Target repetisi" : "Target detik"}
                   </span>
                 </div>
               </div>
@@ -112,6 +145,12 @@ export default async function ExerciseDetailPage({
       <Container className="py-section">
         <div className="grid gap-section desktop-small:grid-cols-[1fr_360px]">
           <div>
+            {milestoneChallenge && (
+              <div className="mb-section rounded-sm border border-[#e7c951] bg-[#fff6c7] p-xl">
+                <p className="text-xs font-bold uppercase tracking-widest">Challenge level {milestoneLevel}</p>
+                <p className="mt-sm text-sm leading-relaxed text-charcoal">Selesaikan {milestoneChallenge.target_reps} repetisi dengan skor minimal {Number(milestoneChallenge.minimum_score)}, maksimal {milestoneChallenge.max_form_errors} kesalahan{milestoneChallenge.require_tracking_continuity ? ", dan tetap terlihat kamera sepanjang sesi" : ""}.</p>
+              </div>
+            )}
             <h2 className="font-display text-4xl uppercase tablet-narrow:text-5xl">
               Persiapan sebelum mulai
             </h2>
@@ -139,6 +178,40 @@ export default async function ExerciseDetailPage({
             </div>
 
             <div className="mt-section">
+              <p className="text-xs font-bold uppercase tracking-widest text-mute">Posisi awal</p>
+              <p className="mt-sm max-w-2xl text-sm leading-relaxed text-charcoal">{tutorial.startPosition}</p>
+            </div>
+
+            <div className="mt-section">
+              <h2 className="font-display text-4xl uppercase tablet-narrow:text-5xl">
+                Tahapan gerakan
+              </h2>
+              <ol className="mt-lg grid gap-md tablet-narrow:grid-cols-2">
+                {tutorial.steps.map((step, index) => (
+                  <li key={step} className="flex gap-md rounded-sm bg-white p-lg">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sport-black font-display text-lg text-sport-lime">{index + 1}</span>
+                    <span className="pt-xs text-sm leading-relaxed">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div className="mt-section grid gap-md tablet-narrow:grid-cols-2">
+              <article className="rounded-sm border border-[#f2c16b] bg-[#fff8e7] p-xl">
+                <h2 className="font-display text-3xl uppercase">Kesalahan umum</h2>
+                <ul className="mt-lg space-y-sm text-sm leading-relaxed text-charcoal">
+                  {tutorial.mistakes.map((item) => <li key={item} className="flex gap-sm"><span aria-hidden="true">•</span><span>{item}</span></li>)}
+                </ul>
+              </article>
+              <article className="rounded-sm border border-[#b9d8c4] bg-[#eef8f1] p-xl">
+                <h2 className="font-display text-3xl uppercase">Tips keselamatan</h2>
+                <ul className="mt-lg space-y-sm text-sm leading-relaxed text-charcoal">
+                  {tutorial.safety.map((item) => <li key={item} className="flex gap-sm"><Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-success" /><span>{item}</span></li>)}
+                </ul>
+              </article>
+            </div>
+
+            <div className="mt-section">
               <h2 className="font-display text-4xl uppercase tablet-narrow:text-5xl">
                 Cara menggunakan coach
               </h2>
@@ -157,7 +230,7 @@ export default async function ExerciseDetailPage({
             <p className="text-xs font-bold uppercase tracking-widest text-mute">Target sesi</p>
             <div className="mt-lg flex items-end justify-between border-b border-hairline-soft pb-lg">
               <span className="text-sm text-mute">Repetisi bawaan</span>
-              <strong className="font-display text-4xl">{exercise.default_target_reps ?? "—"}</strong>
+              <strong className="font-display text-4xl">{displayedTargetReps ?? "—"}</strong>
             </div>
             <div className="flex items-end justify-between border-b border-hairline-soft py-lg">
               <span className="text-sm text-mute">Durasi</span>
@@ -167,8 +240,9 @@ export default async function ExerciseDetailPage({
             </div>
             <TargetSelector
               slug={exercise.slug}
-              defaultReps={exercise.default_target_reps}
+              defaultReps={displayedTargetReps}
               defaultSeconds={exercise.default_target_seconds}
+              milestoneLevel={milestoneLevel}
             />
             {version && (
               <p className="mt-lg text-center text-[10px] text-stone">
@@ -180,4 +254,8 @@ export default async function ExerciseDetailPage({
       </Container>
     </>
   );
+}
+
+function stringArray(value: unknown, fallback: string[]): string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : fallback;
 }

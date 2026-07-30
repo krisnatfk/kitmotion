@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeWorkoutXp, workoutXpIdempotencyKey, XP_BASE, XP_TARGET_BONUS } from "./xp";
-import { levelForXp, type LevelDefinition } from "./level";
+import { levelForXp, levelWithMilestoneGate, pendingMilestoneLevel, type LevelDefinition } from "./level";
 
 const LEVELS: LevelDefinition[] = [
   { level: 1, name: "Beginner", minTotalXp: 0 },
@@ -49,5 +49,19 @@ describe("levelForXp", () => {
   });
   it("returns 1 when no levels are defined", () => {
     expect(levelForXp(999, [])).toBe(1);
+  });
+});
+
+describe("milestone level gate", () => {
+  it("holds an earned level above 10 until the milestone is completed", () => {
+    expect(levelWithMilestoneGate(14, 10)).toBe(10);
+    expect(pendingMilestoneLevel(14, 10)).toBe(10);
+  });
+
+  it("opens the next band after a milestone succeeds", () => {
+    expect(levelWithMilestoneGate(14, 20)).toBe(14);
+    expect(pendingMilestoneLevel(14, 20)).toBeNull();
+    expect(levelWithMilestoneGate(24, 20)).toBe(20);
+    expect(pendingMilestoneLevel(24, 20)).toBe(20);
   });
 });

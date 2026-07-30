@@ -16,13 +16,16 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type UserRole = "student" | "admin";
+export type UserRole = "student" | "teacher" | "admin";
 export type ExerciseDifficulty = "beginner" | "intermediate" | "advanced";
 export type WorkoutStatus = "created" | "active" | "completed" | "cancelled" | "failed";
 export type FeedbackSeverity = "info" | "warning" | "critical";
 export type RewardSource = "workout" | "run" | "challenge" | "badge" | "admin_adjustment";
 export type ChallengePeriod = "daily" | "weekly" | "custom";
 export type SensorSource = "none" | "iot_necklace";
+export type MembershipStatus = "pending" | "active" | "rejected" | "left" | "removed";
+export type InvitationStatus = "pending" | "accepted" | "rejected" | "expired";
+export type MilestoneStatus = "locked" | "available" | "completed";
 
 export interface Database {
   public: {
@@ -347,6 +350,7 @@ export interface Database {
           user_id: string;
           total_xp: number;
           current_level: number;
+          max_unlocked_level: number;
           total_sessions: number;
           total_valid_reps: number;
           current_streak: number;
@@ -358,6 +362,7 @@ export interface Database {
           user_id: string;
           total_xp?: number;
           current_level?: number;
+          max_unlocked_level?: number;
           total_sessions?: number;
           total_valid_reps?: number;
           current_streak?: number;
@@ -525,6 +530,173 @@ export interface Database {
         ];
       };
 
+      exercise_tutorials: {
+        Row: {
+          exercise_id: string;
+          start_position: string;
+          steps: Json;
+          common_mistakes: Json;
+          safety_tips: Json;
+          animation_url: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          exercise_id: string;
+          start_position: string;
+          steps?: Json;
+          common_mistakes?: Json;
+          safety_tips?: Json;
+          animation_url?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["exercise_tutorials"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "exercise_tutorials_exercise_id_fkey"; columns: ["exercise_id"]; referencedRelation: "exercises"; referencedColumns: ["id"] },
+        ];
+      };
+
+      level_difficulty_configs: {
+        Row: { level: number; target_multiplier: number; minimum_score: number; tolerance_multiplier: number; created_at: string };
+        Insert: { level: number; target_multiplier?: number; minimum_score?: number; tolerance_multiplier?: number; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["level_difficulty_configs"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "level_difficulty_configs_level_fkey"; columns: ["level"]; referencedRelation: "level_definitions"; referencedColumns: ["level"] },
+        ];
+      };
+
+      milestone_challenges: {
+        Row: {
+          id: string;
+          milestone_level: number;
+          exercise_id: string;
+          title: string;
+          description: string;
+          target_reps: number;
+          minimum_score: number;
+          max_form_errors: number;
+          require_tracking_continuity: boolean;
+          xp_reward: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          milestone_level: number;
+          exercise_id: string;
+          title: string;
+          description: string;
+          target_reps: number;
+          minimum_score: number;
+          max_form_errors?: number;
+          require_tracking_continuity?: boolean;
+          xp_reward?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["milestone_challenges"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "milestone_challenges_exercise_id_fkey"; columns: ["exercise_id"]; referencedRelation: "exercises"; referencedColumns: ["id"] },
+        ];
+      };
+
+      user_milestones: {
+        Row: {
+          user_id: string;
+          milestone_level: number;
+          status: MilestoneStatus;
+          attempt_count: number;
+          completed_at: string | null;
+          reward_claimed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          milestone_level: number;
+          status?: MilestoneStatus;
+          attempt_count?: number;
+          completed_at?: string | null;
+          reward_claimed_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["user_milestones"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "user_milestones_user_id_fkey"; columns: ["user_id"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "user_milestones_milestone_level_fkey"; columns: ["milestone_level"]; referencedRelation: "milestone_challenges"; referencedColumns: ["milestone_level"] },
+        ];
+      };
+
+      milestone_attempts: {
+        Row: {
+          id: string;
+          user_id: string;
+          milestone_level: number;
+          session_id: string;
+          success: boolean;
+          achieved_reps: number;
+          achieved_score: number;
+          form_errors: number;
+          tracking_loss_count: number;
+          attempted_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          milestone_level: number;
+          session_id: string;
+          success: boolean;
+          achieved_reps: number;
+          achieved_score: number;
+          form_errors: number;
+          tracking_loss_count?: number;
+          attempted_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["milestone_attempts"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "milestone_attempts_user_id_fkey"; columns: ["user_id"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "milestone_attempts_milestone_level_fkey"; columns: ["milestone_level"]; referencedRelation: "milestone_challenges"; referencedColumns: ["milestone_level"] },
+          { foreignKeyName: "milestone_attempts_session_id_fkey"; columns: ["session_id"]; referencedRelation: "workout_sessions"; referencedColumns: ["id"] },
+        ];
+      };
+
+      classrooms: {
+        Row: { id: string; teacher_id: string; name: string; school_year: string | null; is_active: boolean; created_at: string; updated_at: string };
+        Insert: { id?: string; teacher_id: string; name: string; school_year?: string | null; is_active?: boolean; created_at?: string; updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["classrooms"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "classrooms_teacher_id_fkey"; columns: ["teacher_id"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
+
+      class_join_codes: {
+        Row: { id: string; classroom_id: string; code: string; expires_at: string | null; is_active: boolean; created_at: string };
+        Insert: { id?: string; classroom_id: string; code: string; expires_at?: string | null; is_active?: boolean; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["class_join_codes"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "class_join_codes_classroom_id_fkey"; columns: ["classroom_id"]; referencedRelation: "classrooms"; referencedColumns: ["id"] },
+        ];
+      };
+
+      class_invitations: {
+        Row: { id: string; classroom_id: string; student_id: string; code_used: string; status: InvitationStatus; consented_at: string | null; responded_at: string | null; expires_at: string | null; created_at: string };
+        Insert: { id?: string; classroom_id: string; student_id: string; code_used: string; status?: InvitationStatus; consented_at?: string | null; responded_at?: string | null; expires_at?: string | null; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["class_invitations"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "class_invitations_classroom_id_fkey"; columns: ["classroom_id"]; referencedRelation: "classrooms"; referencedColumns: ["id"] },
+          { foreignKeyName: "class_invitations_student_id_fkey"; columns: ["student_id"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
+
+      class_memberships: {
+        Row: { id: string; classroom_id: string; student_id: string; invitation_id: string | null; status: MembershipStatus; consented_at: string | null; joined_at: string | null; ended_at: string | null; updated_at: string };
+        Insert: { id?: string; classroom_id: string; student_id: string; invitation_id?: string | null; status?: MembershipStatus; consented_at?: string | null; joined_at?: string | null; ended_at?: string | null; updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["class_memberships"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "class_memberships_classroom_id_fkey"; columns: ["classroom_id"]; referencedRelation: "classrooms"; referencedColumns: ["id"] },
+          { foreignKeyName: "class_memberships_student_id_fkey"; columns: ["student_id"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "class_memberships_invitation_id_fkey"; columns: ["invitation_id"]; referencedRelation: "class_invitations"; referencedColumns: ["id"] },
+        ];
+      };
+
       admin_audit_logs: {
         Row: {
           id: string;
@@ -559,6 +731,11 @@ export interface Database {
       handle_new_user: { Args: Record<string, unknown>; Returns: unknown };
       handle_new_profile: { Args: Record<string, unknown>; Returns: unknown };
       set_updated_at: { Args: Record<string, unknown>; Returns: unknown };
+      is_teacher: { Args: Record<string, never>; Returns: boolean };
+      teacher_has_active_student: { Args: { target_student: string }; Returns: boolean };
+      teacher_can_view_student_session: { Args: { target_student: string; session_completed_at: string }; Returns: boolean };
+      owns_classroom: { Args: { target_classroom: string }; Returns: boolean };
+      belongs_to_classroom: { Args: { target_classroom: string }; Returns: boolean };
     };
     Enums: {
       user_role: UserRole;
@@ -568,6 +745,9 @@ export interface Database {
       reward_source: RewardSource;
       challenge_period: ChallengePeriod;
       sensor_source: SensorSource;
+      membership_status: MembershipStatus;
+      invitation_status: InvitationStatus;
+      milestone_status: MilestoneStatus;
     };
     CompositeTypes: Record<string, never>;
   };

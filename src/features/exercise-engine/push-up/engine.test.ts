@@ -46,6 +46,8 @@ function pushUpFrame(elbowAngleDeg: number, tsMs: number, visibility = 1): PoseF
   set(POSE_LANDMARKS.LEFT_HIP, sx + thigh * 0.5, sy);
   set(POSE_LANDMARKS.RIGHT_KNEE, kneeX, kneeY);
   set(POSE_LANDMARKS.LEFT_KNEE, kneeX, kneeY);
+  set(POSE_LANDMARKS.RIGHT_ANKLE, kneeX + 0.15, kneeY);
+  set(POSE_LANDMARKS.LEFT_ANKLE, kneeX + 0.15, kneeY);
 
   return { landmarks: lm, timestampMs: tsMs };
 }
@@ -96,14 +98,32 @@ describe("PushUpEngine", () => {
     expect(r.validReps).toBe(2);
   });
 
-  it("marks a rep invalid when elbows never bend enough", () => {
+  it("does not count a shallow arm movement as a repetition", () => {
     const engine = new PushUpEngine();
     engine.initialize({});
     const end = driveOnePushUp(engine, 0, PUSH_UP_DEFAULT_CONFIG.elbowDownMax + 25);
     const r = engine.processFrame(pushUpFrame(170, end));
-    expect(r.repCount).toBe(1);
+    expect(r.repCount).toBe(0);
     expect(r.validReps).toBe(0);
-    expect(r.invalidReps).toBe(1);
+    expect(r.invalidReps).toBe(0);
+  });
+
+  it("cancels an incomplete repetition when tracking is lost", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    const cfg = PUSH_UP_DEFAULT_CONFIG;
+    let ts = 0;
+    for (let index = 0; index < cfg.debounceFrames + 1; index += 1) {
+      engine.processFrame(pushUpFrame(cfg.elbowUpMin - 30, ts));
+      ts += 100;
+    }
+    engine.processFrame(pushUpFrame(80, ts, 0));
+    ts += 100;
+    for (let index = 0; index < cfg.debounceFrames + 2; index += 1) {
+      engine.processFrame(pushUpFrame(cfg.elbowUpMin, ts));
+      ts += 100;
+    }
+    expect(engine.finalize().totalReps).toBe(0);
   });
 
   it("pauses scoring when tracking is lost", () => {

@@ -1,6 +1,6 @@
 # Schema — KITMOTION (Application-First)
 
-> **Versi:** 2.0  
+> **Versi:** 2.1
 > **Database:** PostgreSQL melalui Supabase  
 > **Fokus:** Data aplikasi  
 > **IoT:** Belum diimplementasikan
@@ -24,6 +24,7 @@
 ```sql
 create type public.user_role as enum (
   'student',
+  'teacher',
   'admin'
 );
 
@@ -311,6 +312,7 @@ create table public.user_progress (
   user_id uuid primary key references public.profiles(id) on delete cascade,
   total_xp integer not null default 0,
   current_level integer not null default 1,
+  max_unlocked_level integer not null default 10,
   total_sessions integer not null default 0,
   total_valid_reps integer not null default 0,
   current_streak integer not null default 0,
@@ -481,12 +483,14 @@ Aktifkan RLS pada:
 
 Prinsip:
 
-1. User hanya membaca datanya sendiri.
+1. Siswa hanya membaca datanya sendiri.
 2. User tidak mengubah XP sendiri.
 3. User tidak mengubah role.
 4. User tidak mengubah final score.
 5. Finalize session melalui server.
 6. Admin diverifikasi server-side.
+7. Guru hanya membaca siswa dengan membership aktif dan consent tercatat.
+8. Sesi guru dibatasi ke sesi yang selesai setelah waktu consent.
 
 ---
 
@@ -527,3 +531,23 @@ Tidak ada badge penggunaan kalung pada tahap ini.
 4. Repetition metrics disimpan.
 5. Sensor summary null.
 6. Tidak ada raw telemetry.
+
+---
+
+## 13. Ekstensi Learning Platform v2.1
+
+Migration `0007_teacher_role.sql` dan `0008_learning_platform.sql` menambahkan:
+
+- `exercise_tutorials`: posisi awal, langkah, kesalahan umum, keselamatan, dan media opsional;
+- `level_difficulty_configs`: target, skor minimum, dan toleransi per level;
+- `milestone_challenges`, `user_milestones`, `milestone_attempts`: gerbang level 10/20/30 dan hasil percobaan;
+- `classrooms`, `class_join_codes`, `class_invitations`, `class_memberships`: kelas, undangan, status, dan consent;
+- `user_progress.max_unlocked_level`: batas level yang sudah dibuka.
+
+Relasi akses laporan:
+
+```text
+teacher -> classrooms -> active class_memberships + consent -> student -> workout_sessions
+```
+
+Server action menggunakan service role hanya setelah memverifikasi actor. RLS tetap menjadi lapisan kedua dan mencabut akses ketika membership berubah dari `active`.

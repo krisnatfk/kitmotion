@@ -125,7 +125,8 @@ export function AdminUsersManager({
           </label>
           <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as RoleFilter)} className="input-pill min-h-11 bg-[#f7f8f5] text-sm" aria-label="Filter role">
             <option value="all">Semua role</option>
-            <option value="student">User</option>
+            <option value="student">Siswa</option>
+            <option value="teacher">Guru</option>
             <option value="admin">Admin</option>
           </select>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="input-pill min-h-11 bg-[#f7f8f5] text-sm" aria-label="Filter status">
@@ -183,7 +184,7 @@ export function AdminUsersManager({
               <>
                 <div className="mt-lg grid gap-lg tablet-narrow:grid-cols-2">
                   <div><Label htmlFor="managed-full-name">Nama lengkap</Label><Input id="managed-full-name" value={fullName} onChange={(event) => setFullName(event.target.value)} /></div>
-                  <div><Label htmlFor="managed-role">Hak akses</Label><select id="managed-role" value={role} onChange={(event) => setRole(event.target.value as UserRole)} className="input-pill"><option value="student">User biasa</option><option value="admin">Administrator</option></select></div>
+                  <div><Label htmlFor="managed-role">Hak akses</Label><select id="managed-role" value={role} onChange={(event) => setRole(event.target.value as UserRole)} className="input-pill"><option value="student">Siswa</option><option value="teacher">Guru</option><option value="admin">Administrator</option></select></div>
                 </div>
                 <div className="mt-lg grid grid-cols-2 gap-sm rounded-sm bg-[#f4f6f2] p-md tablet-narrow:grid-cols-4">
                   <MiniStat label="Level" value={String(selected.level)} />
@@ -219,7 +220,7 @@ function UserIdentity({ user, current }: { user: AdminUserRow; current: boolean 
 }
 
 function RoleBadge({ role }: { role: UserRole }) {
-  return <span className={`inline-flex rounded-full px-md py-sm text-[9px] font-bold uppercase tracking-wider ${role === "admin" ? "bg-sport-black text-sport-lime" : "bg-[#eef1eb] text-charcoal"}`}>{role === "admin" ? "Admin" : "User"}</span>;
+  return <span className={`inline-flex rounded-full px-md py-sm text-[9px] font-bold uppercase tracking-wider ${role === "admin" ? "bg-sport-black text-sport-lime" : role === "teacher" ? "bg-[#e8f0ff] text-[#2356a8]" : "bg-[#eef1eb] text-charcoal"}`}>{role === "admin" ? "Admin" : role === "teacher" ? "Guru" : "Siswa"}</span>;
 }
 
 function StatusBadge({ blocked }: { blocked: boolean }) {

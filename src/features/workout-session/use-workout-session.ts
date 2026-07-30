@@ -33,6 +33,7 @@ export interface UseWorkoutSessionArgs {
   exerciseSlug: string;
   targetReps: number | null;
   targetSeconds: number | null;
+  milestoneLevel: number | null;
 }
 
 /**
@@ -49,12 +50,15 @@ export function useWorkoutSession({
   exerciseSlug,
   targetReps,
   targetSeconds,
+  milestoneLevel,
 }: UseWorkoutSessionArgs) {
   const engine = useMemo(() => createEngine(engineKey), [engineKey]);
   const sensorProvider = useMemo(() => new NoopSensorProvider(), []);
   const startedAtRef = useRef<number>(0);
   const timerRef = useRef<number | null>(null);
   const sensorSummaryRef = useRef<SensorSessionSummary | null>(null);
+  const trackingLossCountRef = useRef(0);
+  const previousTrackingValidRef = useRef(true);
 
   const [live, setLive] = useState<LiveState>({
     status: "idle",
@@ -91,6 +95,8 @@ export function useWorkoutSession({
     startedAtRef.current = Date.now();
     await sensorProvider.startSession();
     sensorSummaryRef.current = null;
+    trackingLossCountRef.current = 0;
+    previousTrackingValidRef.current = true;
     setLive({
       status: "active",
       phase: "ready",
@@ -115,6 +121,8 @@ export function useWorkoutSession({
     (frame: PoseFrame) => {
       if (!engine || live.status !== "active") return;
       const result = engine.processFrame(frame);
+      if (previousTrackingValidRef.current && !result.trackingValid) trackingLossCountRef.current += 1;
+      previousTrackingValidRef.current = result.trackingValid;
       setLive((s) => ({
         ...s,
         phase: result.phase,
@@ -177,6 +185,8 @@ export function useWorkoutSession({
       durationSeconds: Math.max(0, Math.round(elapsedMs / 1000)),
       targetReps,
       targetSeconds,
+      milestoneLevel,
+      trackingLossCount: trackingLossCountRef.current,
       totalReps: metrics.totalReps,
       validReps: metrics.validReps,
       invalidReps: metrics.invalidReps,
@@ -191,7 +201,7 @@ export function useWorkoutSession({
       feedback,
       sensorSummary: summary.source === "none" ? null : summary,
     };
-  }, [engine, sensorProvider, live.status, live.elapsedMs, exerciseSlug, targetReps, targetSeconds]);
+  }, [engine, sensorProvider, live.status, live.elapsedMs, exerciseSlug, targetReps, targetSeconds, milestoneLevel]);
 
   // Cleanup sensor on unmount.
   useEffect(() => {

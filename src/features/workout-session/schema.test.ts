@@ -75,6 +75,12 @@ describe("finalizeSessionSchema", () => {
     expect(badRep.success).toBe(false);
     expect(badFeedback.success).toBe(false);
   });
+
+  it("accepts only milestone levels in multiples of ten", () => {
+    expect(finalizeSessionSchema.safeParse({ ...BASE_PAYLOAD, milestoneLevel: 10, trackingLossCount: 0 }).success).toBe(true);
+    expect(finalizeSessionSchema.safeParse({ ...BASE_PAYLOAD, milestoneLevel: 11, trackingLossCount: 0 }).success).toBe(false);
+    expect(finalizeSessionSchema.safeParse({ ...BASE_PAYLOAD, milestoneLevel: 10, trackingLossCount: -1 }).success).toBe(false);
+  });
 });
 
 describe("workout payload helpers", () => {

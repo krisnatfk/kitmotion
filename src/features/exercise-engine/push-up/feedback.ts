@@ -8,6 +8,7 @@ export const PUSH_UP_FEEDBACK: Record<
   "hips-too-low": { severity: "warning", message: "Pinggul turun. Kencangkan perut dan angkat pinggul hingga bahu, pinggul, dan lutut segaris." },
   "hips-too-high": { severity: "warning", message: "Pinggul terlalu tinggi. Turunkan pinggul hingga tubuh membentuk garis lurus." },
   "elbows-not-bent": { severity: "warning", message: "Siku belum cukup menekuk. Turunkan dada dengan kontrol hingga siku mendekati 90 derajat." },
+  "elbows-asymmetric": { severity: "warning", message: "Tekukan siku belum seimbang. Turunkan tubuh dengan kedua siku bergerak bersamaan." },
   unstable: { severity: "warning", message: "Tubuh bergoyang. Lebarkan tumpuan tangan sedikit dan kencangkan otot inti." },
   "tempo-fast": { severity: "info", message: "Push-up terlalu cepat. Turunkan dan dorong tubuh kembali dengan kontrol." },
   "tempo-slow": { severity: "info", message: "Push-up terlalu lambat. Pertahankan ritme tanpa berhenti di posisi bawah." },

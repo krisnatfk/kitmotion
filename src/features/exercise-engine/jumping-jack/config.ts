@@ -6,10 +6,14 @@ export const JUMPING_JACK_SCORING_VERSION = "cam-v1";
 export interface JumpingJackConfig {
   /** Wrist-distance / shoulder-width ratio at which arms count as "open". */
   armOpenMinRatio: number;
+  /** Minimum wrist height above shoulders, normalized to torso height. */
+  armHeightMinRatio: number;
   /** Ankle-distance / hip-width ratio at which legs count as "open". */
   legOpenMinRatio: number;
   /** Max delta between left/right arm heights (normalized) before "asymmetry". */
   symmetryMaxDelta: number;
+  /** Maximum normalized arm/leg phase mismatch before coordination feedback. */
+  coordinationMaxDelta: number;
   debounceFrames: number;
   minConfidence: number;
   tempoFastMs: number;
@@ -19,8 +23,10 @@ export interface JumpingJackConfig {
 /** Defaults mirror supabase/migrations/0003_seed.sql (jumping-jack config). */
 export const JUMPING_JACK_DEFAULT_CONFIG: JumpingJackConfig = {
   armOpenMinRatio: 1.5,
+  armHeightMinRatio: 0.3,
   legOpenMinRatio: 1.25,
   symmetryMaxDelta: 0.15,
+  coordinationMaxDelta: 0.35,
   debounceFrames: 3,
   minConfidence: 0.5,
   tempoFastMs: 350,

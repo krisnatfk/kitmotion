@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Container } from "@/components/ui/container";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
@@ -7,7 +8,7 @@ import { getCurrentProfile, getCurrentProgress, getDashboardGamification } from 
 import { listExercises } from "@/features/exercises/queries";
 import { withTimeoutFallback } from "@/lib/async";
 
-const EMPTY_GAMIFICATION = { badges: [], challenges: [] };
+const EMPTY_GAMIFICATION = { badges: [], challenges: [], milestone: null };
 
 export default async function DashboardPage() {
   // Authentication is enforced by middleware. Optional dashboard data gets a
@@ -24,6 +25,7 @@ export default async function DashboardPage() {
   const sessions = progress?.total_sessions ?? 0;
   const featured = exercises[0];
   const databaseReady = Boolean(profile || progress || exercises.length > 0);
+  if (profile?.role === "teacher") redirect("/teacher");
 
   return (
     <Container className="py-xl tablet-narrow:py-section">
@@ -47,6 +49,13 @@ export default async function DashboardPage() {
           <ButtonLink href="/admin" className="shrink-0 bg-sport-black px-xl text-white hover:bg-sport-charcoal">
             Buka Admin Panel <Icon name="arrow" className="h-4 w-4" />
           </ButtonLink>
+        </section>
+      )}
+
+      {gamification.milestone && (
+        <section className="mt-xl grid gap-lg rounded-sm bg-[#ffef9f] p-xl desktop-small:grid-cols-[1fr_auto] desktop-small:items-center" aria-label="Challenge kenaikan level">
+          <div className="flex items-start gap-md"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-sport-black text-sport-lime"><Icon name="lock" className="h-6 w-6" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.2em]">Level {gamification.milestone.level} terkunci</p><h2 className="mt-xs text-xl font-bold">{gamification.milestone.title}</h2><p className="mt-xs max-w-3xl text-xs leading-relaxed text-black/65">{gamification.milestone.targetReps} repetisi · skor minimal {gamification.milestone.minimumScore} · maksimal {gamification.milestone.maxFormErrors} kesalahan{gamification.milestone.requireTrackingContinuity ? " · tubuh harus tetap terlihat kamera" : ""}. Percobaan: {gamification.milestone.attemptCount}.</p></div></div>
+          <ButtonLink href={`/exercises/${gamification.milestone.exerciseSlug}?milestone=${gamification.milestone.level}`} className="shrink-0 bg-sport-black px-xl text-white hover:bg-sport-charcoal">Mulai challenge <Icon name="arrow" className="h-4 w-4" /></ButtonLink>
         </section>
       )}
 

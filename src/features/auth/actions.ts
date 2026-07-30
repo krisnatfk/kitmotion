@@ -59,7 +59,13 @@ export async function loginAction(input: LoginInput & { next?: string }): Promis
 
   if (error) return { error: translateAuthError(error.message) };
 
-  return { redirectTo: safeNext(input.next) };
+  if (input.next) return { redirectTo: safeNext(input.next) };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    if (profile?.role === "teacher") return { redirectTo: "/teacher" };
+  }
+  return { redirectTo: "/dashboard" };
 }
 
 export async function logoutAction(): Promise<ActionResult> {

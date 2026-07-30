@@ -21,9 +21,19 @@ type WorkoutRunnerProps = {
   scoringVersion: string;
   targetReps: number | null;
   targetSeconds: number | null;
+  milestoneLevel: number | null;
 };
 
-export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engineKey, config, scoringVersion, targetReps, targetSeconds }: WorkoutRunnerProps) {
+type StartCountdown = {
+  mode: "auto" | "timer";
+  seconds: number;
+};
+
+const AUTO_READY_HOLD_MS = 1_500;
+const AUTO_TRACKING_GRACE_MS = 800;
+const MANUAL_TIMER_SECONDS = 10;
+
+export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engineKey, config, scoringVersion, targetReps, targetSeconds, milestoneLevel }: WorkoutRunnerProps) {
   const router = useRouter();
   const camera = useCamera();
   const [landmarker, setLandmarker] = useState<unknown>(null);
@@ -34,10 +44,12 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
   const [result, setResult] = useState<FinalizeResult | null>(null);
   const [pendingPayload, setPendingPayload] = useState<FinalizeSessionInput | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [startCountdown, setStartCountdown] = useState<StartCountdown | null>(null);
   const finalizingRef = useRef(false);
   const latestReady = useRef(false);
+  const startSessionRef = useRef<() => Promise<void>>(async () => {});
 
-  const session = useWorkoutSession({ engineKey, config, exerciseSlug, targetReps, targetSeconds });
+  const session = useWorkoutSession({ engineKey, config, exerciseSlug, targetReps, targetSeconds, milestoneLevel });
 
   const handleFrame = useCallback((frame: PoseFrame) => {
     const nextReadiness = checkReadiness(frame.landmarks);
@@ -66,8 +78,86 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
     setError(null);
     setPendingPayload(null);
     setResult(null);
+    setStartCountdown(null);
+    announceStartCue("Mulai");
     await session.start();
   }, [session]);
+
+  useEffect(() => {
+    startSessionRef.current = startSession;
+  }, [startSession]);
+
+  const phase = session.live.status;
+  const startAvailable = camera.status === "ready" && !!landmarker && phase === "idle";
+
+  // Start hands-free only after the ready pose remains stable.
+  useEffect(() => {
+    if (!startAvailable || readiness.status !== "ready" || startCountdown) return;
+
+    const timer = window.setTimeout(() => {
+      setStartCountdown({ mode: "auto", seconds: 3 });
+    }, AUTO_READY_HOLD_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [readiness.status, startAvailable, startCountdown]);
+
+  // Ignore a brief detection flicker, but cancel auto-start on sustained loss.
+  useEffect(() => {
+    if (startCountdown?.mode !== "auto" || readiness.status === "ready") return;
+
+    const timer = window.setTimeout(() => {
+      setStartCountdown(null);
+      cancelStartCue();
+    }, AUTO_TRACKING_GRACE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [readiness.status, startCountdown?.mode]);
+
+  useEffect(() => {
+    if (!startCountdown || startCountdown.seconds <= 0 || phase !== "idle") return;
+
+    if (startCountdown.seconds <= 3) {
+      announceStartCue(indonesianCountdown(startCountdown.seconds));
+    }
+
+    const timer = window.setTimeout(() => {
+      setStartCountdown((current) =>
+        current ? { ...current, seconds: Math.max(0, current.seconds - 1) } : null,
+      );
+    }, 1_000);
+
+    return () => window.clearTimeout(timer);
+  }, [phase, startCountdown]);
+
+  // When the ten-second fallback ends, wait for a stable pose instead of
+  // recording a session with incomplete tracking.
+  useEffect(() => {
+    if (
+      startCountdown?.seconds !== 0 ||
+      phase !== "idle" ||
+      readiness.status !== "ready"
+    ) {
+      return;
+    }
+
+    const delay = startCountdown.mode === "timer" ? AUTO_READY_HOLD_MS : 0;
+    const timer = window.setTimeout(() => {
+      if (latestReady.current) void startSessionRef.current();
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [phase, readiness.status, startCountdown]);
+
+  const startDelayedSession = useCallback(() => {
+    setError(null);
+    announceStartCue("Timer sepuluh detik dimulai");
+    setStartCountdown({ mode: "timer", seconds: MANUAL_TIMER_SECONDS });
+  }, []);
+
+  const cancelCountdown = useCallback(() => {
+    setStartCountdown(null);
+    cancelStartCue();
+  }, []);
 
   const finishSession = useCallback(async () => {
     if (finalizingRef.current) return;
@@ -98,12 +188,18 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
     }
   }, [camera, pendingPayload, session]);
 
-  useEffect(() => () => releasePoseLandmarker(), []);
+  useEffect(
+    () => () => {
+      cancelStartCue();
+      releasePoseLandmarker();
+    },
+    [],
+  );
 
   if (result) {
     return <Container className="py-section">
       <section className="rounded-sm bg-sport-black p-xl text-white tablet-narrow:p-section">
-        <p className="eyebrow text-sport-lime">Sesi selesai</p>
+        <p className="eyebrow text-sport-lime">{milestoneLevel ? `Challenge level ${milestoneLevel}` : "Sesi selesai"}</p>
         <div className="mt-xl flex flex-col gap-lg tablet-narrow:flex-row tablet-narrow:items-end tablet-narrow:justify-between">
           <div><h1 className="font-display text-8xl leading-none text-sport-lime tablet-narrow:text-9xl">{result.finalScore}</h1><p className="mt-sm text-white/60">Skor akhir · {exerciseName}</p></div>
           <div className="rounded-sm border border-white/10 bg-white/[0.04] px-xl py-lg"><p className="text-xs uppercase tracking-widest text-white/45">Grade</p><p className="mt-xs font-display text-5xl">{result.grade}</p></div>
@@ -112,13 +208,13 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
       <div className="mt-lg grid grid-cols-2 gap-sm tablet-narrow:grid-cols-4"><ResultStat label="XP didapat" value={`+${result.xpAwarded}`} /><ResultStat label="Level" value={String(result.newLevel || "—")} /><ResultStat label="Repetisi valid" value={String(session.live.validReps)} /><ResultStat label="Total repetisi" value={String(session.live.repCount)} /></div>
       {result.newBadges.length > 0 && <ResultList title="Badge baru" items={result.newBadges.map((badge) => ({ key: badge.code, label: `🏅 ${badge.name}` }))} />}
       {result.challengesCompleted.length > 0 && <ResultList title="Challenge selesai" items={result.challengesCompleted.map((challenge) => ({ key: challenge.code, label: `🎯 ${challenge.title}` }))} />}
+      {result.milestone && <div className={`mt-lg rounded-sm p-lg text-sm ${result.milestone.success ? "bg-[#eaf7ee] text-success" : "bg-[#fff7df] text-charcoal"}`}><strong>{result.milestone.success ? "Milestone berhasil" : "Milestone belum berhasil"}</strong><p className="mt-xs">{result.milestone.message}</p></div>}
       <div className="mt-section flex flex-wrap gap-md"><Button onClick={() => router.push("/history")}>Lihat riwayat</Button><Button variant="secondary" onClick={() => router.push("/exercises")}>Latihan lain</Button></div>
     </Container>;
   }
 
-  const phase = session.live.status;
   const phaseLabel: Record<string, string> = { idle: "Persiapan", active: "Sedang latihan", finished: "Selesai" };
-  const canStart = camera.status === "ready" && !!landmarker && readiness.status === "ready";
+  const preparationMessage = getPreparationMessage(startCountdown, readiness.message);
 
   return <Container className="py-xl tablet-narrow:py-section">
     <header className="flex items-center justify-between gap-lg"><div><Link href={`/exercises/${exerciseSlug}`} className="inline-flex items-center gap-xs text-xs text-mute hover:text-ink"><Icon name="arrow" className="h-3.5 w-3.5 rotate-180" /> Kembali ke panduan</Link><h1 className="mt-sm font-display text-4xl uppercase tablet-narrow:text-5xl">{exerciseName}</h1></div><span className="chip"><span className={`h-2 w-2 rounded-full ${phase === "active" ? "animate-pulse bg-sport-lime-deep" : "bg-stone"}`} />{phaseLabel[phase] ?? phase}</span></header>
@@ -133,6 +229,23 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
           />
           <div className="pointer-events-none absolute left-md top-md rounded-full bg-black/65 px-md py-sm text-[10px] font-bold uppercase tracking-widest text-white backdrop-blur"><span className="mr-sm inline-block h-2 w-2 rounded-full bg-sport-lime" />Live pose</div>
           {camera.status !== "ready" && <div className="absolute inset-0 flex flex-col items-center justify-center bg-sport-black/90 p-xl text-center text-white"><span className="grid h-16 w-16 place-items-center rounded-full bg-white/10"><Icon name="camera" className="h-7 w-7 text-sport-lime" /></span><h2 className="mt-lg font-display text-3xl uppercase">Kamera belum aktif</h2><p className="mt-sm max-w-md text-sm leading-relaxed text-white/55">Kamera diperlukan untuk membaca gerakan. Video diproses langsung di perangkat dan tidak pernah disimpan.</p><Button onClick={enableCamera} disabled={loadingModel} className="mt-lg bg-sport-lime text-sport-black hover:bg-white">{loadingModel ? "Memuat model…" : "Aktifkan kamera"}</Button>{camera.status === "denied" && <p className="mt-md text-caption-sm text-sale">{camera.error}</p>}</div>}
+          {startCountdown && phase === "idle" && camera.status === "ready" && (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center bg-sport-black/35 text-center text-white backdrop-blur-[2px]">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-sport-lime">
+                  {startCountdown.mode === "timer" ? "Ambil posisi" : "Posisi terkunci"}
+                </p>
+                <p className="mt-sm font-display text-8xl leading-none">
+                  {startCountdown.seconds > 0 ? startCountdown.seconds : "SIAP"}
+                </p>
+                <p className="mt-sm text-sm text-white/75">
+                  {startCountdown.seconds > 0
+                    ? "Sesi akan dimulai otomatis"
+                    : "Tahan posisi sampai tubuh terbaca"}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
         <p className="mt-md flex items-start gap-sm text-xs leading-relaxed text-mute"><Icon name="camera" className="mt-0.5 h-4 w-4 shrink-0" />{cameraPosition}</p>
       </div>
@@ -146,9 +259,18 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
           <Button onClick={finishSession} disabled={finalizing} className="mt-xl w-full bg-sport-lime text-sport-black hover:bg-white">{finalizing ? "Menyimpan…" : "Coba simpan lagi"}</Button>
         </> : phase !== "active" ? <>
           <p className="text-xs font-bold uppercase tracking-widest text-white/40">Status kesiapan</p>
-          <div className="mt-lg flex items-start gap-md"><span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${readiness.status === "ready" ? "bg-sport-lime" : "bg-white/25"}`} /><p className="text-sm leading-relaxed text-white/70" role="status" aria-live="polite">{readiness.message}</p></div>
-          <div className="mt-xl space-y-md border-y border-white/10 py-lg">{["Seluruh tubuh terlihat", "Area latihan aman", "Pencahayaan cukup"].map((item) => <p key={item} className="flex items-center gap-sm text-xs text-white/50"><Icon name="check" className="h-4 w-4 text-sport-lime" />{item}</p>)}</div>
-          <Button onClick={startSession} disabled={!canStart} className="mt-xl w-full bg-sport-lime text-sport-black hover:bg-white"><Icon name="play" className="h-5 w-5" /> Mulai sesi</Button>
+          <div className="mt-lg flex items-start gap-md"><span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${readiness.status === "ready" ? "bg-sport-lime" : "bg-white/25"}`} /><p className="text-sm leading-relaxed text-white/70" role="status" aria-live="polite">{preparationMessage}</p></div>
+          <div className="mt-xl space-y-md border-y border-white/10 py-lg">
+            <p className="flex items-center gap-sm text-xs text-white/60"><Icon name={readiness.status === "ready" ? "check" : "target"} className={`h-4 w-4 ${readiness.status === "ready" ? "text-sport-lime" : "text-white/35"}`} />Tubuh dan kaki terbaca kamera</p>
+            <p className="flex items-center gap-sm text-xs text-white/50"><Icon name="check" className="h-4 w-4 text-sport-lime" />Mulai otomatis setelah posisi stabil</p>
+            <p className="flex items-center gap-sm text-xs text-white/50"><Icon name="check" className="h-4 w-4 text-sport-lime" />Pastikan area gerak aman</p>
+          </div>
+          {startCountdown ? (
+            <Button variant="secondary" onClick={cancelCountdown} className="mt-xl w-full border-white/20 bg-white/10 text-white hover:bg-white/20">Batalkan timer</Button>
+          ) : (
+            <Button onClick={startDelayedSession} disabled={!startAvailable} className="mt-xl w-full bg-sport-lime text-sport-black hover:bg-white"><Icon name="history" className="h-5 w-5" /> Timer 10 detik</Button>
+          )}
+          <p className="mt-md text-center text-[10px] leading-relaxed text-white/35">Tidak perlu menyentuh layar saat posisi sudah tepat.</p>
         </> : <>
           <p className="eyebrow text-sport-lime">Sesi berlangsung</p>
           <div className="mt-lg"><LiveHud repCount={session.live.repCount} validReps={session.live.validReps} elapsedMs={session.live.elapsedMs} trackingValid={session.live.trackingValid} feedback={session.live.feedback} liveMetric={session.live.liveMetric} targetReps={targetReps} /></div>
@@ -159,6 +281,50 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
       </aside>
     </div>
   </Container>;
+}
+
+function getPreparationMessage(
+  countdown: StartCountdown | null,
+  readinessMessage: string,
+): string {
+  if (!countdown) {
+    return readinessMessage === "Posisi sudah baik. Mulai latihan."
+      ? "Posisi sudah baik. Tahan sebentar untuk mulai otomatis."
+      : readinessMessage;
+  }
+  if (countdown.seconds === 0) {
+    return countdown.mode === "timer"
+      ? "Timer selesai. Tahan posisi yang benar untuk memulai."
+      : "Tahan posisi. Sesi segera dimulai.";
+  }
+  return countdown.mode === "timer"
+    ? `Ambil posisi. Sesi dimulai dalam ${countdown.seconds} detik.`
+    : `Posisi terkunci. Mulai dalam ${countdown.seconds} detik.`;
+}
+
+function indonesianCountdown(seconds: number): string {
+  return ({ 3: "Tiga", 2: "Dua", 1: "Satu" } as Record<number, string>)[seconds] ?? String(seconds);
+}
+
+function announceStartCue(message: string): void {
+  if (
+    typeof window === "undefined" ||
+    !("speechSynthesis" in window) ||
+    !("SpeechSynthesisUtterance" in window)
+  ) {
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(message);
+  utterance.lang = "id-ID";
+  utterance.rate = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+function cancelStartCue(): void {
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
 }
 
 function LiveHud(props: { repCount: number; validReps: number; elapsedMs: number; trackingValid: boolean; feedback: { code: string; severity: string; message: string }[]; liveMetric?: { label: string; value: number }; targetReps: number | null }) {

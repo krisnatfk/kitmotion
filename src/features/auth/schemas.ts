@@ -11,6 +11,7 @@ export const registerSchema = z.object({
     .string()
     .min(8, "Kata sandi minimal 8 karakter")
     .max(72, "Kata sandi terlalu panjang"),
+  role: z.enum(["student", "teacher"]),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

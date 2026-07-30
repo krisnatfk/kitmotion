@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSupabaseServer, getSupabaseServiceRole } from "@/lib/supabase/server";
 import { computeFinalScore, SCORING_VERSION } from "@/features/scoring/scoring";
 import { applySessionRewards } from "@/features/gamification/apply";
+import { applyMilestoneAttempt, type MilestoneAttemptResult } from "@/features/gamification/milestones";
 import type { Json } from "@/types/database.types";
 import { finalizeSessionSchema, type FinalizeSessionInput } from "./schema";
 
@@ -15,6 +16,7 @@ export type FinalizeResult = {
   newLevel: number;
   newBadges: { code: string; name: string }[];
   challengesCompleted: { code: string; title: string }[];
+  milestone: MilestoneAttemptResult | null;
 };
 
 export type FinalizeError = { error: string };
@@ -94,6 +96,16 @@ export async function finalizeSession(
 
   const admin = getSupabaseServiceRole();
 
+  if (data.milestoneLevel != null) {
+    const [{ data: challenge }, { data: milestoneState }] = await Promise.all([
+      admin.from("milestone_challenges").select("exercise_id").eq("milestone_level", data.milestoneLevel).eq("is_active", true).single(),
+      admin.from("user_milestones").select("status").eq("user_id", user.id).eq("milestone_level", data.milestoneLevel).single(),
+    ]);
+    if (!challenge || challenge.exercise_id !== exercise.id || milestoneState?.status !== "available") {
+      return { error: "Challenge milestone tidak tersedia untuk sesi ini." };
+    }
+  }
+
   // Idempotency: if a session with this client_session_id already exists,
   // return its existing result instead of duplicating (FR-066).
   const { data: existing } = await admin
@@ -116,6 +128,7 @@ export async function finalizeSession(
       newLevel: progress?.current_level ?? 1,
       newBadges: [],
       challengesCompleted: [],
+      milestone: null,
     };
   }
 
@@ -152,7 +165,11 @@ export async function finalizeSession(
       sensor_summary: null,
       app_version: null,
       scoring_version: version.scoring_version ?? SCORING_VERSION,
-      metadata: { engine_key: version.engine_key },
+      metadata: {
+        engine_key: version.engine_key,
+        tracking_loss_count: data.trackingLossCount,
+        milestone_level: data.milestoneLevel,
+      },
     })
     .select("id")
     .single();
@@ -223,6 +240,17 @@ export async function finalizeSession(
     completedAt,
   });
 
+  const milestone = data.milestoneLevel == null ? null : await applyMilestoneAttempt(admin, {
+    sessionId,
+    userId: user.id,
+    milestoneLevel: data.milestoneLevel,
+    validReps: data.validReps,
+    invalidReps: data.invalidReps,
+    finalScore: score.finalScore,
+    trackingLossCount: data.trackingLossCount,
+    completedAt,
+  });
+
   revalidatePath("/history");
   revalidatePath("/dashboard");
 
@@ -230,9 +258,10 @@ export async function finalizeSession(
     sessionId,
     finalScore: score.finalScore,
     grade: score.grade,
-    xpAwarded: rewards.xpAwarded,
-    newLevel: rewards.newLevel,
+    xpAwarded: rewards.xpAwarded + (milestone?.xpAwarded ?? 0),
+    newLevel: milestone?.newLevel ?? rewards.newLevel,
     newBadges: rewards.newBadges,
     challengesCompleted: rewards.challengesCompleted,
+    milestone,
   };
 }

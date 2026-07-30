@@ -267,7 +267,7 @@ export async function saveChallengeAction(
 const managedUserSchema = z.object({
   userId: z.string().uuid(),
   fullName: z.string().trim().min(2, "Nama minimal 2 karakter.").max(80),
-  role: z.enum(["student", "admin"]),
+  role: z.enum(["student", "teacher", "admin"]),
 });
 
 const managedUserStatusSchema = z.object({

@@ -15,3 +15,13 @@ export function levelForXp(totalXp: number, levels: LevelDefinition[]): number {
   }
   return current;
 }
+
+/** XP may keep growing, but milestone levels cap visible progress until passed. */
+export function levelWithMilestoneGate(earnedLevel: number, maxUnlockedLevel: number): number {
+  return Math.max(1, Math.min(earnedLevel, Math.max(10, maxUnlockedLevel)));
+}
+
+export function pendingMilestoneLevel(earnedLevel: number, maxUnlockedLevel: number): number | null {
+  const gate = Math.max(10, Math.floor(maxUnlockedLevel / 10) * 10);
+  return earnedLevel > gate ? gate : null;
+}

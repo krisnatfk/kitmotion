@@ -148,6 +148,11 @@ KITMOTION dibangun sebagai:
 30. Error handling.
 31. Loading, empty, success, dan error state.
 32. Fondasi integrasi IoT nonaktif.
+33. Akun guru dan dashboard guru.
+34. Kelas, kode undangan, dan persetujuan siswa.
+35. Laporan guru dengan filter dan rekap.
+36. Target latihan mengikuti level.
+37. Challenge kenaikan level pada kelipatan 10.
 
 ### 7.2 Fitur setelah MVP
 
@@ -157,12 +162,10 @@ KITMOTION dibangun sebagai:
 4. Data accelerometer dan gyroscope.
 5. Sensor fusion.
 6. Status baterai perangkat.
-7. Dashboard guru.
-8. Leaderboard lanjutan.
-9. Gerakan tambahan.
-10. Rekomendasi latihan personal.
-11. Ekspor laporan.
-12. Mode kelas.
+7. Leaderboard lanjutan.
+8. Gerakan tambahan.
+9. Rekomendasi latihan personal.
+10. Ekspor laporan.
 
 ---
 
@@ -202,6 +205,8 @@ flowchart TD
 - **FR-004** Pengguna dapat meminta reset password.
 - **FR-005** Route pengguna dilindungi.
 - **FR-006** Admin memiliki route terpisah.
+- **FR-007** Pendaftaran menyediakan role siswa dan guru.
+- **FR-008** Role tidak dapat diubah dari client.
 
 ### 9.2 Profil
 
@@ -278,6 +283,9 @@ flowchart TD
 - **FR-084** Challenge memiliki target dan waktu.
 - **FR-085** Progres challenge diperbarui setelah sesi.
 - **FR-086** Reward tidak boleh diberikan dua kali.
+- **FR-087** Target dan toleransi latihan meningkat mengikuti level.
+- **FR-088** Level berhenti pada kelipatan 10 sampai challenge milestone berhasil.
+- **FR-089** Percobaan, hasil, waktu selesai, dan reward milestone disimpan secara idempoten.
 
 ### 9.10 Riwayat
 
@@ -296,17 +304,25 @@ flowchart TD
 - **FR-104** Admin dapat melihat sesi latihan.
 - **FR-105** Aksi admin dicatat.
 
-### 9.12 Kesiapan integrasi IoT
+### 9.12 Guru, kelas, dan persetujuan
 
-- **FR-110** Sistem memiliki interface sumber data sensor.
-- **FR-111** Implementasi default menggunakan `NoopSensorProvider`.
-- **FR-112** Feature flag `iotIntegrationEnabled` bernilai false.
-- **FR-113** UI tidak menampilkan menu perangkat saat feature flag false.
-- **FR-114** Workout session menerima sensor summary sebagai nilai opsional.
-- **FR-115** Database menyediakan kolom opsional yang tidak mengharuskan data perangkat.
-- **FR-116** Tidak ada endpoint IoT aktif pada fase ini.
-- **FR-117** Tidak ada tabel telemetry aktif pada fase ini.
-- **FR-118** Integrasi mendatang tidak boleh mengubah kontrak inti workout secara besar.
+- **FR-106** Guru dapat membuat kelas dan kode undangan.
+- **FR-107** Siswa melihat identitas guru/kelas sebelum menyetujui.
+- **FR-108** Laporan hanya tersedia selama membership aktif dengan consent tercatat.
+- **FR-109** Guru dapat memfilter rekap berdasarkan kelas, siswa, latihan, dan rentang tanggal.
+- **FR-110** Keluar atau dikeluarkan dari kelas mencabut akses ke laporan latihan baru.
+
+### 9.13 Kesiapan integrasi IoT
+
+- **FR-120** Sistem memiliki interface sumber data sensor.
+- **FR-121** Implementasi default menggunakan `NoopSensorProvider`.
+- **FR-122** Feature flag `iotIntegrationEnabled` bernilai false.
+- **FR-123** UI tidak menampilkan menu perangkat saat feature flag false.
+- **FR-124** Workout session menerima sensor summary sebagai nilai opsional.
+- **FR-125** Database menyediakan kolom opsional yang tidak mengharuskan data perangkat.
+- **FR-126** Tidak ada endpoint IoT aktif pada fase ini.
+- **FR-127** Tidak ada tabel telemetry aktif pada fase ini.
+- **FR-128** Integrasi mendatang tidak boleh mengubah kontrak inti workout secara besar.
 
 ---
 

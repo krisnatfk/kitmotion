@@ -12,6 +12,8 @@ export interface PushUpConfig {
   hipSagMaxDrop: number;
   /** Max hip rise (normalized rise above the shoulder-ankle line). */
   hipRiseMaxRise: number;
+  /** Maximum left/right elbow-angle difference when both arms are visible. */
+  elbowSymmetryMaxDelta: number;
   debounceFrames: number;
   minConfidence: number;
   tempoFastMs: number;
@@ -24,6 +26,7 @@ export const PUSH_UP_DEFAULT_CONFIG: PushUpConfig = {
   elbowUpMin: 160,
   hipSagMaxDrop: 0.12,
   hipRiseMaxRise: 0.12,
+  elbowSymmetryMaxDelta: 18,
   debounceFrames: 3,
   minConfidence: 0.5,
   tempoFastMs: 400,

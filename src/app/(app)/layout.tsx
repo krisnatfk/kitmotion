@@ -20,7 +20,7 @@ export default async function AppLayout({
     );
   }
 
-  const profile = await withTimeoutFallback(getCurrentProfile(), null, 2_500);
+  const profile = await withTimeoutFallback(getCurrentProfile(), null, 6_000);
 
   return (
     <div className="min-h-dvh bg-[#f7f8f5]">
@@ -28,6 +28,7 @@ export default async function AppLayout({
         avatarPath={profile?.avatar_path}
         displayName={profile?.full_name}
         isAdmin={profile?.role === "admin"}
+        isTeacher={profile?.role === "teacher"}
       />
       <main className="app-content">{children}</main>
     </div>

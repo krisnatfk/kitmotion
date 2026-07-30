@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { computeWorkoutXp, workoutXpIdempotencyKey } from "./xp";
-import { levelForXp, type LevelDefinition } from "./level";
+import { levelForXp, levelWithMilestoneGate, pendingMilestoneLevel, type LevelDefinition } from "./level";
 
 type ServiceClient = SupabaseClient<Database>;
 
@@ -72,6 +72,7 @@ export async function applySessionRewards(
     user_id: input.userId,
     total_xp: 0,
     current_level: 1,
+    max_unlocked_level: 10,
     total_sessions: 0,
     total_valid_reps: 0,
     current_streak: 0,
@@ -115,7 +116,9 @@ export async function applySessionRewards(
     name: r.name,
     minTotalXp: r.min_total_xp,
   }));
-  const newLevel = levelForXp(newTotalXp, levelDefs);
+  const maxUnlockedLevel = prev.max_unlocked_level ?? 10;
+  const earnedLevel = levelForXp(newTotalXp, levelDefs);
+  const newLevel = levelWithMilestoneGate(earnedLevel, maxUnlockedLevel);
 
   const { error: upError } = await supabase
     .from("user_progress")
@@ -123,6 +126,7 @@ export async function applySessionRewards(
       user_id: input.userId,
       total_xp: newTotalXp,
       current_level: newLevel,
+      max_unlocked_level: maxUnlockedLevel,
       total_sessions: newTotalSessions,
       total_valid_reps: newTotalValidReps,
       current_streak: currentStreak,
@@ -148,12 +152,14 @@ export async function applySessionRewards(
   // not one workout later.
   const bonusRewardXp = badgeRewards.xpAwarded + challengeRewards.xpAwarded;
   const finalTotalXp = newTotalXp + bonusRewardXp;
-  const finalLevel = levelForXp(finalTotalXp, levelDefs);
+  const finalEarnedLevel = levelForXp(finalTotalXp, levelDefs);
+  const finalLevel = levelWithMilestoneGate(finalEarnedLevel, maxUnlockedLevel);
   if (bonusRewardXp > 0) {
     const { error: rewardProgressError } = await supabase.from("user_progress").upsert({
       user_id: input.userId,
       total_xp: finalTotalXp,
       current_level: finalLevel,
+      max_unlocked_level: maxUnlockedLevel,
       total_sessions: newTotalSessions,
       total_valid_reps: newTotalValidReps,
       current_streak: currentStreak,
@@ -161,6 +167,15 @@ export async function applySessionRewards(
       last_activity_date: today,
     });
     if (rewardProgressError) throw new Error(`Gagal menyinkronkan reward: ${rewardProgressError.message}`);
+  }
+
+  const pendingMilestone = pendingMilestoneLevel(finalEarnedLevel, maxUnlockedLevel);
+  if (pendingMilestone != null) {
+    await supabase.from("user_milestones").upsert({
+      user_id: input.userId,
+      milestone_level: pendingMilestone,
+      status: "available",
+    }, { onConflict: "user_id,milestone_level", ignoreDuplicates: true });
   }
 
   return {

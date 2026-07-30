@@ -27,7 +27,7 @@ export function RegisterForm() {
     formState: { errors },
   } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { full_name: "", email: "", password: "" },
+    defaultValues: { full_name: "", email: "", password: "", role: "student" },
   });
 
   async function onSubmit(values: RegisterInput) {
@@ -43,8 +43,8 @@ export function RegisterForm() {
         email: values.email,
         password: values.password,
         options: {
-          data: { full_name: values.full_name },
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+          data: { full_name: values.full_name, requested_role: values.role },
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${values.role === "teacher" ? "/teacher" : "/dashboard"}`,
         },
       });
 
@@ -58,7 +58,7 @@ export function RegisterForm() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push(values.role === "teacher" ? "/teacher" : "/dashboard");
       router.refresh();
     } catch {
       setServer({ error: "Pendaftaran tidak dapat diproses. Periksa koneksi lalu coba lagi." });
@@ -110,6 +110,16 @@ export function RegisterForm() {
           {...register("full_name")}
         />
         <FieldError>{errors.full_name?.message}</FieldError>
+      </div>
+
+      <div>
+        <Label htmlFor="role">Jenis akun</Label>
+        <select id="role" className="input-pill" aria-invalid={!!errors.role} {...register("role")}>
+          <option value="student">Siswa — latihan dan pantau progres</option>
+          <option value="teacher">Guru — buat kelas dan lihat laporan</option>
+        </select>
+        <FieldError>{errors.role?.message}</FieldError>
+        <p className="mt-xs text-[11px] leading-relaxed text-mute">Role disimpan saat akun dibuat dan tidak dapat diubah dari halaman profil.</p>
       </div>
 
       <div>

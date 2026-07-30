@@ -25,6 +25,8 @@ interface JackRep {
   maxArmSpread: number;
   maxLegSpread: number;
   maxAsymmetry: number;
+  maxCoordinationDelta: number;
+  reachedOpen: boolean;
   issueCodes: Set<string>;
   valid: boolean;
 }
@@ -73,11 +75,12 @@ export class JumpingJackEngine implements ExerciseEngine {
     if (this.startMs === 0) this.startMs = frame.timestampMs;
     this.lastFrameMs = frame.timestampMs;
 
-    const { trackingValid, armSpread, legSpread, asymmetry } = this.readKinematics(
+    const { trackingValid, armSpread, armHeight, legSpread, asymmetry, coordinationDelta } = this.readKinematics(
       frame.landmarks,
     );
 
     if (!trackingValid) {
+      this.abortIncompleteRep();
       return this.result([], false);
     }
 
@@ -85,12 +88,13 @@ export class JumpingJackEngine implements ExerciseEngine {
       this.currentRep.maxArmSpread = Math.max(this.currentRep.maxArmSpread, armSpread);
       this.currentRep.maxLegSpread = Math.max(this.currentRep.maxLegSpread, legSpread);
       this.currentRep.maxAsymmetry = Math.max(this.currentRep.maxAsymmetry, asymmetry);
+      this.currentRep.maxCoordinationDelta = Math.max(this.currentRep.maxCoordinationDelta, coordinationDelta);
     }
 
     const feedback: FrameFeedback[] = [];
-    this.evaluateIssues(armSpread, legSpread, asymmetry, feedback);
+    this.evaluateIssues(armSpread, armHeight, legSpread, asymmetry, coordinationDelta, feedback);
     const repetitionsBefore = this.repetitions.length;
-    this.advance(armSpread, legSpread, frame.timestampMs);
+    this.advance(armSpread, armHeight, legSpread, frame.timestampMs);
     appendCompletedRepFeedback(this.repetitions, repetitionsBefore, feedback, JUMPING_JACK_FEEDBACK);
 
     return this.result(feedback, true);
@@ -148,7 +152,7 @@ export class JumpingJackEngine implements ExerciseEngine {
       visible(rWrist, cfg.minConfidence);
 
     if (!ok) {
-      return { trackingValid: false, armSpread: 0, legSpread: 0, asymmetry: 0 };
+      return { trackingValid: false, armSpread: 0, armHeight: 0, legSpread: 0, asymmetry: 0, coordinationDelta: 0 };
     }
 
     const shoulderWidth = Math.abs(lShoulder!.x - rShoulder!.x) || 1;
@@ -156,27 +160,38 @@ export class JumpingJackEngine implements ExerciseEngine {
 
     const armSpread = Math.abs(lWrist!.x - rWrist!.x) / shoulderWidth;
     const legSpread = Math.abs(lAnkle!.x - rAnkle!.x) / hipWidth;
+    const shoulderY = (lShoulder!.y + rShoulder!.y) / 2;
+    const hipY = (lHip!.y + rHip!.y) / 2;
+    const wristY = (lWrist!.y + rWrist!.y) / 2;
+    const torsoHeight = Math.abs(hipY - shoulderY) || shoulderWidth;
+    const armHeight = (shoulderY - wristY) / torsoHeight;
 
     // Asymmetry: difference in wrist height (normalized to shoulder width).
     const asymmetry = Math.abs(lWrist!.y - rWrist!.y) / shoulderWidth;
+    const armProgress = clamp01((armSpread - 1) / Math.max(0.01, cfg.armOpenMinRatio - 1));
+    const legProgress = clamp01((legSpread - 1) / Math.max(0.01, cfg.legOpenMinRatio - 1));
+    const coordinationDelta = Math.abs(armProgress - legProgress);
 
-    return { trackingValid: true, armSpread, legSpread, asymmetry };
+    return { trackingValid: true, armSpread, armHeight, legSpread, asymmetry, coordinationDelta };
   }
 
   private evaluateIssues(
     armSpread: number,
+    armHeight: number,
     legSpread: number,
     asymmetry: number,
+    coordinationDelta: number,
     feedback: FrameFeedback[],
   ): void {
     const cfg = this.config;
     const codes: string[] = [];
 
     if (this.phase === JumpingJackPhase.OPEN || this.phase === JumpingJackPhase.OPENING) {
-      if (armSpread < cfg.armOpenMinRatio) push(codes, feedback, "arms-too-low", JUMPING_JACK_FEEDBACK);
+      if (armSpread < cfg.armOpenMinRatio || armHeight < cfg.armHeightMinRatio) push(codes, feedback, "arms-too-low", JUMPING_JACK_FEEDBACK);
       if (legSpread < cfg.legOpenMinRatio) push(codes, feedback, "legs-too-narrow", JUMPING_JACK_FEEDBACK);
     }
     if (asymmetry > cfg.symmetryMaxDelta) push(codes, feedback, "asymmetry", JUMPING_JACK_FEEDBACK);
+    if (coordinationDelta > cfg.coordinationMaxDelta) push(codes, feedback, "arms-legs-out-of-sync", JUMPING_JACK_FEEDBACK);
 
     if (codes.length === 0 && this.phase === JumpingJackPhase.OPEN) {
       push(codes, feedback, "good", JUMPING_JACK_FEEDBACK);
@@ -187,9 +202,9 @@ export class JumpingJackEngine implements ExerciseEngine {
     }
   }
 
-  private advance(armSpread: number, legSpread: number, ts: number): void {
+  private advance(armSpread: number, armHeight: number, legSpread: number, ts: number): void {
     const cfg = this.config;
-    const isOpen = armSpread >= cfg.armOpenMinRatio && legSpread >= cfg.legOpenMinRatio;
+    const isOpen = armSpread >= cfg.armOpenMinRatio && armHeight >= cfg.armHeightMinRatio && legSpread >= cfg.legOpenMinRatio;
     const isClosed =
       armSpread < cfg.armOpenMinRatio * 0.85 && legSpread < cfg.legOpenMinRatio * 0.85;
 
@@ -218,8 +233,8 @@ export class JumpingJackEngine implements ExerciseEngine {
         return isOpen || !isClosed ? JumpingJackPhase.OPENING : JumpingJackPhase.CLOSED;
       case JumpingJackPhase.OPENING:
         if (isOpen) return JumpingJackPhase.OPEN;
-        // Returned to closed without reaching OPEN -> counts as an invalid rep.
-        if (isClosed) return JumpingJackPhase.COMPLETE;
+        // A shallow open-close motion is noise, not a repetition.
+        if (isClosed) return JumpingJackPhase.CLOSED;
         return JumpingJackPhase.OPENING;
       case JumpingJackPhase.OPEN:
         return !isOpen ? JumpingJackPhase.CLOSING : JumpingJackPhase.OPEN;
@@ -243,13 +258,24 @@ export class JumpingJackEngine implements ExerciseEngine {
         maxArmSpread: 0,
         maxLegSpread: 0,
         maxAsymmetry: 0,
+        maxCoordinationDelta: 0,
+        reachedOpen: false,
         issueCodes: new Set<string>(),
         valid: false,
       };
     }
 
+    if (to === JumpingJackPhase.OPEN && this.currentRep) {
+      this.currentRep.reachedOpen = true;
+    }
+
+    if (from === JumpingJackPhase.OPENING && to === JumpingJackPhase.CLOSED) {
+      this.currentRep = null;
+    }
+
     if (to === JumpingJackPhase.COMPLETE) {
-      this.completeRep(ts);
+      if (this.currentRep?.reachedOpen) this.completeRep(ts);
+      else this.currentRep = null;
       this.phase = JumpingJackPhase.CLOSED;
     }
   }
@@ -313,6 +339,13 @@ export class JumpingJackEngine implements ExerciseEngine {
     this.currentRep = null;
   }
 
+  private abortIncompleteRep(): void {
+    this.currentRep = null;
+    this.phase = JumpingJackPhase.CLOSED;
+    this.pendingPhase = null;
+    this.pendingCount = 0;
+  }
+
   private buildFeedbackSummary(): FeedbackSummary[] {
     return [...this.feedbackCounts.entries()].map(([code, entry]) => {
       const meta = JUMPING_JACK_FEEDBACK[code] ?? { severity: "info" as const, message: code };
@@ -341,6 +374,10 @@ export class JumpingJackEngine implements ExerciseEngine {
 
 function visible(lm: NormalizedLandmark | undefined, min: number): boolean {
   return !!lm && lm.visibility >= min;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 function push(

@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseServer, getSupabaseServiceRole } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -24,6 +24,18 @@ export interface DashboardChallenge {
   endsAt: string;
 }
 
+export interface DashboardMilestone {
+  level: number;
+  title: string;
+  description: string;
+  exerciseSlug: string;
+  targetReps: number;
+  minimumScore: number;
+  maxFormErrors: number;
+  requireTrackingContinuity: boolean;
+  attemptCount: number;
+}
+
 export async function getCurrentUser() {
   const supabase = await getSupabaseServer();
   const {
@@ -35,23 +47,55 @@ export async function getCurrentUser() {
 export async function getCurrentProfile(): Promise<Profile | null> {
   const { supabase, user } = await getCurrentUser();
   if (!user) return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
-  return data;
+  if (data) return data;
+
+  // The authenticated query can fail during an RLS rollout or Supabase cold
+  // start. The user identity still comes from auth; the service client is
+  // restricted to that exact user id and never accepts an id from the client.
+  if (error) {
+    try {
+      const service = getSupabaseServiceRole();
+      const { data: fallback } = await service
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      return fallback;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export async function getCurrentProgress(): Promise<UserProgress | null> {
   const { supabase, user } = await getCurrentUser();
   if (!user) return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("user_progress")
     .select("*")
     .eq("user_id", user.id)
     .single();
-  return data;
+  if (data) return data;
+  if (error) {
+    try {
+      const service = getSupabaseServiceRole();
+      const { data: fallback } = await service
+        .from("user_progress")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+      return fallback;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export async function listSchools(): Promise<School[]> {
@@ -63,9 +107,9 @@ export async function listSchools(): Promise<School[]> {
   return data ?? [];
 }
 
-export async function getDashboardGamification(): Promise<{ badges: DashboardBadge[]; challenges: DashboardChallenge[] }> {
+export async function getDashboardGamification(): Promise<{ badges: DashboardBadge[]; challenges: DashboardChallenge[]; milestone: DashboardMilestone | null }> {
   const { supabase, user } = await getCurrentUser();
-  if (!user) return { badges: [], challenges: [] };
+  if (!user) return { badges: [], challenges: [], milestone: null };
   const now = new Date().toISOString();
 
   const [badgeResult, challengeResult, progressResult] = await Promise.all([
@@ -111,5 +155,35 @@ export async function getDashboardGamification(): Promise<{ badges: DashboardBad
     };
   });
 
-  return { badges, challenges };
+  const { data: milestoneState } = await supabase.from("user_milestones")
+    .select("milestone_level, attempt_count")
+    .eq("user_id", user.id)
+    .eq("status", "available")
+    .order("milestone_level", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  let milestone: DashboardMilestone | null = null;
+  if (milestoneState) {
+    const { data: challenge } = await supabase.from("milestone_challenges")
+      .select("exercise_id, title, description, target_reps, minimum_score, max_form_errors, require_tracking_continuity")
+      .eq("milestone_level", milestoneState.milestone_level)
+      .eq("is_active", true)
+      .single();
+    if (challenge) {
+      const { data: exercise } = await supabase.from("exercises").select("slug").eq("id", challenge.exercise_id).single();
+      if (exercise) milestone = {
+        level: milestoneState.milestone_level,
+        title: challenge.title,
+        description: challenge.description,
+        exerciseSlug: exercise.slug,
+        targetReps: challenge.target_reps,
+        minimumScore: Number(challenge.minimum_score),
+        maxFormErrors: challenge.max_form_errors,
+        requireTrackingContinuity: challenge.require_tracking_continuity,
+        attemptCount: milestoneState.attempt_count,
+      };
+    }
+  }
+
+  return { badges, challenges, milestone };
 }

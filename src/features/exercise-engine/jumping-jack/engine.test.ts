@@ -10,7 +10,13 @@ import { POSE_LANDMARKS } from "../core/landmarks";
  * (1 = neutral/together, >1 = apart). We place wrists and ankles at the
  * right horizontal distance to produce those spreads.
  */
-function jackFrame(armOpen: number, legOpen: number, tsMs: number, visibility = 1): PoseFrame {
+function jackFrame(
+  armOpen: number,
+  legOpen: number,
+  tsMs: number,
+  visibility = 1,
+  wristY = 0.2,
+): PoseFrame {
   const shoulderWidth = 0.2;
   const hipWidth = 0.16;
   const cx = 0.5;
@@ -27,8 +33,8 @@ function jackFrame(armOpen: number, legOpen: number, tsMs: number, visibility = 
   set(POSE_LANDMARKS.LEFT_HIP, cx - hipWidth / 2, 0.55);
   set(POSE_LANDMARKS.RIGHT_HIP, cx + hipWidth / 2, 0.55);
   // Wrist spread = armOpen * shoulderWidth
-  set(POSE_LANDMARKS.LEFT_WRIST, cx - (armOpen * shoulderWidth) / 2, 0.2);
-  set(POSE_LANDMARKS.RIGHT_WRIST, cx + (armOpen * shoulderWidth) / 2, 0.2);
+  set(POSE_LANDMARKS.LEFT_WRIST, cx - (armOpen * shoulderWidth) / 2, wristY);
+  set(POSE_LANDMARKS.RIGHT_WRIST, cx + (armOpen * shoulderWidth) / 2, wristY);
   // Ankle spread = legOpen * hipWidth
   set(POSE_LANDMARKS.LEFT_ANKLE, cx - (legOpen * hipWidth) / 2, 0.9);
   set(POSE_LANDMARKS.RIGHT_ANKLE, cx + (legOpen * hipWidth) / 2, 0.9);
@@ -81,7 +87,7 @@ describe("JumpingJackEngine", () => {
     expect(r.repCount).toBe(2);
   });
 
-  it("marks a rep invalid when arms never open enough", () => {
+  it("does not count a shallow open-close motion as a repetition", () => {
     const engine = new JumpingJackEngine();
     engine.initialize({});
     const cfg = JUMPING_JACK_DEFAULT_CONFIG;
@@ -98,9 +104,43 @@ describe("JumpingJackEngine", () => {
     confirm(cfg.armOpenMinRatio - 0.4, cfg.legOpenMinRatio); // CLOSING
     confirm(1, 1); // COMPLETE (invalid)
     const r = engine.processFrame(jackFrame(1, 1, ts));
-    expect(r.repCount).toBe(1);
-    expect(r.invalidReps).toBe(1);
+    expect(r.repCount).toBe(0);
+    expect(r.invalidReps).toBe(0);
     expect(r.validReps).toBe(0);
+  });
+
+  it("does not treat wide but low hands as an open phase", () => {
+    const engine = new JumpingJackEngine();
+    engine.initialize({});
+    const cfg = JUMPING_JACK_DEFAULT_CONFIG;
+    let ts = 0;
+    for (let index = 0; index < cfg.debounceFrames + 2; index += 1) {
+      engine.processFrame(jackFrame(cfg.armOpenMinRatio + 0.2, cfg.legOpenMinRatio + 0.2, ts, 1, 0.36));
+      ts += 100;
+    }
+    for (let index = 0; index < cfg.debounceFrames + 2; index += 1) {
+      engine.processFrame(jackFrame(1, 1, ts));
+      ts += 100;
+    }
+    expect(engine.finalize().totalReps).toBe(0);
+  });
+
+  it("cancels an incomplete cycle when tracking is lost", () => {
+    const engine = new JumpingJackEngine();
+    engine.initialize({});
+    const cfg = JUMPING_JACK_DEFAULT_CONFIG;
+    let ts = 0;
+    for (let index = 0; index < cfg.debounceFrames + 2; index += 1) {
+      engine.processFrame(jackFrame(cfg.armOpenMinRatio, cfg.legOpenMinRatio, ts));
+      ts += 100;
+    }
+    engine.processFrame(jackFrame(1, 1, ts, 0));
+    ts += 100;
+    for (let index = 0; index < cfg.debounceFrames + 2; index += 1) {
+      engine.processFrame(jackFrame(1, 1, ts));
+      ts += 100;
+    }
+    expect(engine.finalize().totalReps).toBe(0);
   });
 
   it("pauses scoring when tracking is lost", () => {

@@ -634,6 +634,18 @@ Tidak ada endpoint IoT sebelum autentikasi perangkat dirancang dan diuji.
 
 Scoring versi sekarang hanya menggunakan kamera.
 
+### ADR-007
+
+Role guru menggunakan consent berbasis membership kelas. Tidak ada relasi global guru-siswa dan tidak ada data latihan yang disalin ke tabel laporan.
+
+### ADR-008
+
+XP dan level dipisahkan: XP tetap terakumulasi, sedangkan `current_level` dibatasi `max_unlocked_level` sampai milestone kelipatan 10 berhasil.
+
+### ADR-009
+
+Tutorial adalah gerbang route sebelum kamera. Konten utama disimpan di `exercise_tutorials` dengan fallback statis agar halaman tetap memberi panduan saat seed belum tersedia.
+
 ---
 
 ## 20. Batasan

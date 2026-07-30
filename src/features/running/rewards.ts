@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { levelForXp, type LevelDefinition } from "@/features/gamification/level";
+import { levelForXp, levelWithMilestoneGate, pendingMilestoneLevel, type LevelDefinition } from "@/features/gamification/level";
 import type { Database } from "@/types/database.types";
 
 type ServiceClient = SupabaseClient<Database>;
@@ -37,6 +37,7 @@ export async function applyRunRewards(
     user_id: input.userId,
     total_xp: 0,
     current_level: 1,
+    max_unlocked_level: 10,
     total_sessions: 0,
     total_valid_reps: 0,
     current_streak: 0,
@@ -63,12 +64,15 @@ export async function applyRunRewards(
     name: row.name,
     minTotalXp: row.min_total_xp,
   }));
-  const newLevel = levelForXp(totalXp, levels);
+  const maxUnlockedLevel = previous.max_unlocked_level ?? 10;
+  const earnedLevel = levelForXp(totalXp, levels);
+  const newLevel = levelWithMilestoneGate(earnedLevel, maxUnlockedLevel);
 
   const { error: progressError } = await supabase.from("user_progress").upsert({
     user_id: input.userId,
     total_xp: totalXp,
     current_level: newLevel,
+    max_unlocked_level: maxUnlockedLevel,
     total_sessions: previous.total_sessions + 1,
     total_valid_reps: previous.total_valid_reps,
     current_streak: currentStreak,
@@ -76,6 +80,11 @@ export async function applyRunRewards(
     last_activity_date: today,
   });
   if (progressError) throw new Error(progressError.message);
+
+  const pendingMilestone = pendingMilestoneLevel(earnedLevel, maxUnlockedLevel);
+  if (pendingMilestone != null) {
+    await supabase.from("user_milestones").upsert({ user_id: input.userId, milestone_level: pendingMilestone, status: "available" }, { onConflict: "user_id,milestone_level", ignoreDuplicates: true });
+  }
 
   return { xpAwarded: xp, newLevel };
 }

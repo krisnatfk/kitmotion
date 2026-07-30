@@ -1,6 +1,6 @@
 # KITMOTION — Application-First MVP
 
-Aplikasi pembelajaran olahraga berbasis web (PWA) untuk siswa SMA. Membaca pose tubuh via kamera (MediaPipe), menghitung repetisi otomatis, memberi koreksi teknik real-time, merekam aktivitas lari GPS beserta peta rute, dan memberi gamifikasi (XP, level, badge, challenge).
+Aplikasi pembelajaran olahraga berbasis web (PWA) untuk siswa dan guru. Kamera + MediaPipe membaca pose, menghitung repetisi, memberi koreksi teknik, dan menyimpan ringkasan progres. Guru dapat memantau siswa hanya setelah siswa menyetujui keanggotaan kelas.
 
 > **Status IoT:** Future-ready, **tidak aktif**. Tidak ada perangkat/pairing/telemetri/endpoint IoT. Lihat [docs/iot-integration-contract.md](docs/iot-integration-contract.md).
 
@@ -49,9 +49,9 @@ Aplikasi pembelajaran olahraga berbasis web (PWA) untuk siswa SMA. Membaca pose 
    perlu dibuat ulang, jalankan `npm run dev:fresh`. Jangan menjalankan
    `next dev`/`npx next dev` secara langsung karena melewati pengaman tersebut.
 
-## Membuat akun admin
+## Role akun
 
-RLS hanya memberi role `student` saat signup. Untuk menjadikan seorang user admin, jalankan di SQL editor Supabase:
+Halaman daftar menyediakan akun `student` dan `teacher`. Trigger database hanya menerima dua role publik tersebut; role `admin` tidak pernah diterima dari metadata signup dan harus diberikan secara manual:
 
 ```sql
 update public.profiles set role = 'admin' where id = '<user-uuid>';
@@ -109,7 +109,7 @@ src/
 ├─ lib/                      # utils, env, supabase clients
 ├─ types/                    # database.types.ts
 supabase/
-├─ migrations/               # 0001_init s.d. 0006_running
+├─ migrations/               # 0001_init s.d. 0008_learning_platform
 └─ config.toml
 docs/iot-integration-contract.md
 ```
@@ -147,5 +147,6 @@ Email verifikasi yang dibuat ketika Site URL masih localhost tidak dapat diperba
 - Landmark per frame tidak disimpan; hanya ringkasan sesi + metrik per repetisi.
 - Rute GPS hanya direkam saat tracker lari aktif dan berhenti saat jeda/selesai/halaman ditutup.
 - Data pengguna dilindungi RLS (user hanya baca data miliknya).
+- Guru hanya membaca data siswa dengan membership aktif dan consent tercatat; sesi sebelum consent tidak masuk laporan.
 - Skor final & XP dihitung/diberikan server-side; client tidak bisa mengubah.
 - Bukan alat medis; feedback bukan diagnosis.
