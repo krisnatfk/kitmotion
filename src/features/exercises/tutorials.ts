@@ -3,10 +3,12 @@ export type ExerciseTutorial = {
   steps: string[];
   mistakes: string[];
   safety: string[];
+  animationUrl: string | null;
 };
 
 const TUTORIALS: Record<string, ExerciseTutorial> = {
   squat: {
+    animationUrl: "/tutorials/squat-3d.mp4",
     startPosition: "Berdiri tegak, kaki selebar bahu, ujung kaki sedikit mengarah keluar, dan pandangan lurus ke depan.",
     steps: [
       "Dorong pinggul ke belakang seperti hendak duduk.",
@@ -25,6 +27,7 @@ const TUTORIALS: Record<string, ExerciseTutorial> = {
     ],
   },
   "jumping-jack": {
+    animationUrl: "/tutorials/jumping-jack-3d.mp4",
     startPosition: "Berdiri tegak dengan kaki rapat, tangan di samping tubuh, dan lutut rileks.",
     steps: [
       "Lompat ringan sambil membuka kaki sedikit lebih lebar dari bahu.",
@@ -43,6 +46,7 @@ const TUTORIALS: Record<string, ExerciseTutorial> = {
     ],
   },
   "push-up": {
+    animationUrl: "/tutorials/push-up-3d.mp4",
     startPosition: "Mulai dari plank tinggi: tangan sedikit lebih lebar dari bahu dan tubuh lurus dari kepala sampai tumit.",
     steps: [
       "Kencangkan perut dan bokong agar pinggul tidak turun atau terangkat.",
@@ -63,6 +67,7 @@ const TUTORIALS: Record<string, ExerciseTutorial> = {
 };
 
 const FALLBACK: ExerciseTutorial = {
+  animationUrl: null,
   startPosition: "Ikuti posisi awal yang terlihat pada contoh gerakan.",
   steps: ["Lakukan gerakan perlahan.", "Ikuti feedback kamera.", "Selesaikan target dengan teknik yang stabil."],
   mistakes: ["Tubuh keluar dari frame.", "Gerakan terlalu cepat atau tidak mencapai rentang penuh."],

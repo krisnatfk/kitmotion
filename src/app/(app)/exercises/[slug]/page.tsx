@@ -8,6 +8,7 @@ import { getExerciseVisual } from "@/features/exercises/presentation";
 import { getActiveVersion, getExerciseBySlug } from "@/features/exercises/queries";
 import { TargetSelector } from "@/features/exercises/target-selector";
 import { getExerciseTutorial } from "@/features/exercises/tutorials";
+import { ExerciseMotionDemo } from "@/features/exercises/motion-demo";
 import { targetRepsForLevel } from "@/features/exercises/difficulty";
 import { getCurrentProgress } from "@/features/profile/queries";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -21,7 +22,7 @@ const DIFFICULTY_LABEL: Record<string, string> = {
 const COACH_STEPS = [
   "Izinkan akses kamera saat diminta.",
   "Mundur hingga seluruh tubuh masuk ke frame.",
-  "Tunggu indikator siap, lalu tekan Mulai.",
+  "Tahan posisi sampai hitung mundur otomatis dimulai.",
   "Ikuti feedback sampai target latihan tercapai.",
 ];
 
@@ -53,7 +54,7 @@ export default async function ExerciseDetailPage({
         .eq("exercise_id", exercise.id)
         .eq("is_active", true)
         .maybeSingle(),
-    supabase.from("exercise_tutorials").select("start_position, steps, common_mistakes, safety_tips").eq("exercise_id", exercise.id).maybeSingle(),
+    supabase.from("exercise_tutorials").select("start_position, steps, common_mistakes, safety_tips, animation_url").eq("exercise_id", exercise.id).maybeSingle(),
     getCurrentProgress(),
   ]);
   const milestoneChallenge = milestoneResult.data;
@@ -63,6 +64,7 @@ export default async function ExerciseDetailPage({
     steps: stringArray(tutorialRow.steps, fallbackTutorial.steps),
     mistakes: stringArray(tutorialRow.common_mistakes, fallbackTutorial.mistakes),
     safety: stringArray(tutorialRow.safety_tips, fallbackTutorial.safety),
+    animationUrl: tutorialRow.animation_url ?? fallbackTutorial.animationUrl,
   } : fallbackTutorial;
   const levelTargetReps = targetRepsForLevel(exercise.default_target_reps, progress?.current_level ?? 1);
   const displayedTargetReps = milestoneChallenge?.target_reps ?? levelTargetReps;
@@ -97,11 +99,11 @@ export default async function ExerciseDetailPage({
             </p>
               <div className="mt-xxl flex flex-col gap-lg mobile-landscape:flex-row mobile-landscape:items-center">
                 <ButtonLink
-                  href={`/workout/${exercise.slug}?tutorial=1${milestoneLevel ? `&milestone=${milestoneLevel}` : ""}`}
+                  href="#motion-demo-title"
                   className="w-full bg-sport-lime px-xxl text-sport-black hover:bg-white mobile-landscape:w-auto"
                 >
                   <Icon name="play" className="h-5 w-5" />
-                  Mulai latihan
+                  Lihat tutorial
                 </ButtonLink>
                 <div className="flex items-center gap-md border-white/15 mobile-landscape:border-l mobile-landscape:pl-lg">
                   <strong className="font-display text-4xl leading-none text-white">
@@ -176,6 +178,12 @@ export default async function ExerciseDetailPage({
                 </article>
               ))}
             </div>
+
+            <ExerciseMotionDemo
+              slug={exercise.slug}
+              exerciseName={exercise.name}
+              animationUrl={tutorial.animationUrl}
+            />
 
             <div className="mt-section">
               <p className="text-xs font-bold uppercase tracking-widest text-mute">Posisi awal</p>
