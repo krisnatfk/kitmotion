@@ -16,6 +16,7 @@ export function toPoseFrame(
   mpLandmarks: { x: number; y: number; z: number; visibility?: number }[] | undefined,
   timestampMs: number,
   mirror = false,
+  mpWorldLandmarks?: { x: number; y: number; z: number; visibility?: number }[],
 ): PoseFrame {
   if (!mpLandmarks || mpLandmarks.length === 0) {
     return { landmarks: [], timestampMs };
@@ -26,5 +27,11 @@ export function toPoseFrame(
     z: lm.z,
     visibility: lm.visibility ?? 0,
   }));
-  return { landmarks, timestampMs };
+  const worldLandmarks = mpWorldLandmarks?.map((lm) => ({
+    x: lm.x,
+    y: lm.y,
+    z: lm.z,
+    visibility: lm.visibility ?? 0,
+  }));
+  return { landmarks, worldLandmarks, timestampMs };
 }

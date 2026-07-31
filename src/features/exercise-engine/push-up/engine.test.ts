@@ -52,6 +52,73 @@ function pushUpFrame(elbowAngleDeg: number, tsMs: number, visibility = 1, hipOff
   return { landmarks: lm, timestampMs: tsMs };
 }
 
+function frontPushUpFrame(
+  leftElbowAngle: number,
+  tsMs: number,
+  options: { rightElbowAngle?: number; standing?: boolean; hipOffsetY?: number } = {},
+): PoseFrame {
+  const landmarks: NormalizedLandmark[] = Array.from({ length: 33 }, () => ({
+    x: 0.5, y: 0.5, z: 0, visibility: 0,
+  }));
+  const worldLandmarks: NormalizedLandmark[] = Array.from({ length: 33 }, () => ({
+    x: 0, y: 0, z: 0, visibility: 0,
+  }));
+  const setImage = (index: number, x: number, y: number) => {
+    landmarks[index] = { x, y, z: 0, visibility: 1 };
+  };
+  const imagePoints: [number, number, number][] = [
+    [POSE_LANDMARKS.LEFT_SHOULDER, 0.42, 0.3],
+    [POSE_LANDMARKS.RIGHT_SHOULDER, 0.58, 0.3],
+    [POSE_LANDMARKS.LEFT_ELBOW, 0.32, 0.5],
+    [POSE_LANDMARKS.RIGHT_ELBOW, 0.68, 0.5],
+    [POSE_LANDMARKS.LEFT_WRIST, 0.2, 0.76],
+    [POSE_LANDMARKS.RIGHT_WRIST, 0.8, 0.76],
+    [POSE_LANDMARKS.LEFT_HIP, 0.46, 0.5],
+    [POSE_LANDMARKS.RIGHT_HIP, 0.54, 0.5],
+    [POSE_LANDMARKS.LEFT_KNEE, 0.47, 0.62],
+    [POSE_LANDMARKS.RIGHT_KNEE, 0.53, 0.62],
+    [POSE_LANDMARKS.LEFT_ANKLE, 0.48, 0.72],
+    [POSE_LANDMARKS.RIGHT_ANKLE, 0.52, 0.72],
+  ];
+  for (const [index, x, y] of imagePoints) setImage(index, x, y);
+
+  const setWorld = (index: number, x: number, y: number, z: number) => {
+    worldLandmarks[index] = { x, y, z, visibility: 1 };
+  };
+  const standing = options.standing ?? false;
+  const shoulderY = standing ? -0.6 : 0;
+  const ankleY = standing ? 0.7 : 0;
+  const hipZ = standing ? 0 : 0.6;
+  const ankleZ = standing ? 0 : 1.2;
+  const setArm = (side: "left" | "right", angle: number) => {
+    const shoulderIndex = side === "left" ? POSE_LANDMARKS.LEFT_SHOULDER : POSE_LANDMARKS.RIGHT_SHOULDER;
+    const elbowIndex = side === "left" ? POSE_LANDMARKS.LEFT_ELBOW : POSE_LANDMARKS.RIGHT_ELBOW;
+    const wristIndex = side === "left" ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST;
+    const x = side === "left" ? -0.2 : 0.2;
+    const upperArm = 0.25;
+    const forearm = 0.25;
+    const radians = (angle * Math.PI) / 180;
+    setWorld(shoulderIndex, x, shoulderY, 0);
+    setWorld(elbowIndex, x, shoulderY + upperArm, 0);
+    setWorld(
+      wristIndex,
+      x,
+      shoulderY + upperArm - forearm * Math.cos(radians),
+      forearm * Math.sin(radians),
+    );
+  };
+  setArm("left", leftElbowAngle);
+  setArm("right", options.rightElbowAngle ?? leftElbowAngle);
+  const hipY = options.hipOffsetY ?? 0;
+  setWorld(POSE_LANDMARKS.LEFT_HIP, -0.12, hipY, hipZ);
+  setWorld(POSE_LANDMARKS.RIGHT_HIP, 0.12, hipY, hipZ);
+  setWorld(POSE_LANDMARKS.LEFT_KNEE, -0.1, (hipY + ankleY) / 2, (hipZ + ankleZ) / 2);
+  setWorld(POSE_LANDMARKS.RIGHT_KNEE, 0.1, (hipY + ankleY) / 2, (hipZ + ankleZ) / 2);
+  setWorld(POSE_LANDMARKS.LEFT_ANKLE, -0.08, ankleY, ankleZ);
+  setWorld(POSE_LANDMARKS.RIGHT_ANKLE, 0.08, ankleY, ankleZ);
+  return { landmarks, worldLandmarks, timestampMs: tsMs };
+}
+
 function driveOnePushUp(engine: PushUpEngine, startMs: number, bottomAngle = 80, hipOffsetY = 0): number {
   const cfg = PUSH_UP_DEFAULT_CONFIG;
   let ts = startMs;
@@ -67,6 +134,27 @@ function driveOnePushUp(engine: PushUpEngine, startMs: number, bottomAngle = 80,
   confirm(bottomAngle + 30); // ASCENDING
   confirm(cfg.elbowUpMin); // COMPLETE -> UP
   return ts;
+}
+
+function driveOneFrontPushUp(
+  engine: PushUpEngine,
+  startMs: number,
+  bottomLeftAngle = 80,
+  bottomRightAngle = bottomLeftAngle,
+): number {
+  let timestamp = startMs;
+  const confirm = (left: number, right = left) => {
+    for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.debounceFrames + 1; index += 1) {
+      engine.processFrame(frontPushUpFrame(left, timestamp, { rightElbowAngle: right }));
+      timestamp += 100;
+    }
+  };
+  confirm(170);
+  confirm(130);
+  confirm(bottomLeftAngle, bottomRightAngle);
+  confirm(120);
+  confirm(170);
+  return timestamp;
 }
 
 describe("PushUpEngine", () => {
@@ -129,6 +217,38 @@ describe("PushUpEngine", () => {
       }
     }
     expect(engine.finalize().totalReps).toBe(0);
+  });
+
+  it("counts a full push-up while the user faces the camera", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    const end = driveOneFrontPushUp(engine, 0);
+    const result = engine.processFrame(frontPushUpFrame(170, end));
+    expect(result.repCount).toBe(1);
+    expect(result.validReps).toBe(1);
+  });
+
+  it("rejects front-facing arm motion while the body is standing", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    let timestamp = 0;
+    for (const angle of [170, 130, 80, 120, 170]) {
+      for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.debounceFrames + 1; index += 1) {
+        engine.processFrame(frontPushUpFrame(angle, timestamp, { standing: true }));
+        timestamp += 100;
+      }
+    }
+    expect(engine.finalize().totalReps).toBe(0);
+  });
+
+  it("marks a front-facing repetition invalid when the elbows are asymmetric", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    driveOneFrontPushUp(engine, 0, 70, 100);
+    const metrics = engine.finalize();
+    expect(metrics.totalReps).toBe(1);
+    expect(metrics.invalidReps).toBe(1);
+    expect(metrics.repetitions[0]?.metrics.issueCodes).toContain("elbows-asymmetric");
   });
 
   it("marks a full cycle invalid when the hips sag", () => {

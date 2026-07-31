@@ -71,7 +71,7 @@ export function AdminPoseCalibration({ exercises }: { exercises: CalibrationExer
     diagnosticsRef.current.frames += 1;
     if (frame.landmarks.length) diagnosticsRef.current.poseFrames += 1;
     setLandmarks(frame.landmarks.length ? frame.landmarks : null);
-    const nextReadiness = checkReadiness(frame.landmarks, selected.slug);
+    const nextReadiness = checkReadiness(frame.landmarks, selected.slug, frame.worldLandmarks);
     setReadiness({ status: nextReadiness.status, message: nextReadiness.message });
     const engine = engineRef.current;
     if (engine) {
@@ -158,6 +158,7 @@ export function AdminPoseCalibration({ exercises }: { exercises: CalibrationExer
       const sampleCount = Math.max(1, Math.ceil(video.duration * CALIBRATION_FPS));
       const detectionBase = Math.max(performance.now(), lastDetectionTimestampRef.current + 1);
       let previousLandmarks: NormalizedLandmark[] | null = null;
+      let previousWorldLandmarks: NormalizedLandmark[] | null = null;
 
       for (let index = 0; index < sampleCount; index += 1) {
         if (analysisRunRef.current !== runId) return;
@@ -168,14 +169,21 @@ export function AdminPoseCalibration({ exercises }: { exercises: CalibrationExer
         let frame: PoseFrame;
         try {
           const detection = model.detectForVideo(video, detectionTimestamp);
-          const rawFrame = toPoseFrame(detection.landmarks?.[0], videoTime * 1000);
+          const rawFrame = toPoseFrame(
+            detection.landmarks?.[0],
+            videoTime * 1000,
+            false,
+            detection.worldLandmarks?.[0],
+          );
           frame = rawFrame.landmarks.length
-            ? smoothPoseFrame(rawFrame, previousLandmarks)
+            ? smoothPoseFrame(rawFrame, previousLandmarks, undefined, previousWorldLandmarks)
             : rawFrame;
           previousLandmarks = frame.landmarks.length ? frame.landmarks : null;
+          previousWorldLandmarks = frame.worldLandmarks ?? null;
         } catch {
           diagnosticsRef.current.inferenceErrors += 1;
           previousLandmarks = null;
+          previousWorldLandmarks = null;
           frame = { landmarks: [], timestampMs: videoTime * 1000 };
         }
         lastDetectionTimestampRef.current = detectionTimestamp;

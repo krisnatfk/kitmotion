@@ -18,6 +18,8 @@ export interface NormalizedLandmark {
 /** One pose sample delivered to the engine. */
 export interface PoseFrame {
   landmarks: NormalizedLandmark[];
+  /** MediaPipe metric 3D landmarks. Needed when body depth is hidden by a front camera view. */
+  worldLandmarks?: NormalizedLandmark[];
   timestampMs: number;
 }
 

@@ -32,6 +32,7 @@ export function usePoseDetection({
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef(-1);
   const previousLandmarksRef = useRef<PoseFrame["landmarks"] | null>(null);
+  const previousWorldLandmarksRef = useRef<PoseFrame["landmarks"] | null>(null);
   const onFrameRef = useRef(onFrame);
   const onErrorRef = useRef(onError);
 
@@ -52,13 +53,25 @@ export function usePoseDetection({
         lastTimeRef.current = currentTime;
         try {
           const result = landmarker.detectForVideo(video, performance.now());
-          const frame = toPoseFrame(result.landmarks?.[0], performance.now());
+          const frame = toPoseFrame(
+            result.landmarks?.[0],
+            performance.now(),
+            false,
+            result.worldLandmarks?.[0],
+          );
           if (frame.landmarks.length === 0) {
             previousLandmarksRef.current = null;
+            previousWorldLandmarksRef.current = null;
             onFrameRef.current(frame);
           } else {
-            const smoothed = smoothPoseFrame(frame, previousLandmarksRef.current);
+            const smoothed = smoothPoseFrame(
+              frame,
+              previousLandmarksRef.current,
+              undefined,
+              previousWorldLandmarksRef.current,
+            );
             previousLandmarksRef.current = smoothed.landmarks;
+            previousWorldLandmarksRef.current = smoothed.worldLandmarks ?? null;
             onFrameRef.current(smoothed);
           }
         } catch (error) {
@@ -78,6 +91,7 @@ export function usePoseDetection({
         rafRef.current = null;
       }
       previousLandmarksRef.current = null;
+      previousWorldLandmarksRef.current = null;
       lastTimeRef.current = -1;
     };
   }, [active, video, landmarker]);

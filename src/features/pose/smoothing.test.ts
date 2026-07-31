@@ -21,4 +21,10 @@ describe("smoothPoseFrame", () => {
     const current = frame(0.4);
     expect(smoothPoseFrame(current, null)).toBe(current);
   });
+
+  it("smooths world landmarks independently", () => {
+    const current = { ...frame(1), worldLandmarks: frame(1).landmarks };
+    const result = smoothPoseFrame(current, frame(0).landmarks, 0.5, frame(0).landmarks);
+    expect(result.worldLandmarks?.[0]).toMatchObject({ x: 0.5, y: 0.5, z: 0.5 });
+  });
 });

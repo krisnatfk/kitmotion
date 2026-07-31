@@ -7,20 +7,33 @@ export function smoothPoseFrame(
   frame: PoseFrame,
   previous: NormalizedLandmark[] | null,
   currentWeight = DEFAULT_CURRENT_WEIGHT,
+  previousWorld: NormalizedLandmark[] | null = null,
 ): PoseFrame {
   if (frame.landmarks.length === 0 || !previous) return frame;
   const weight = Math.max(0, Math.min(1, currentWeight));
   return {
     ...frame,
-    landmarks: frame.landmarks.map((landmark, index) => {
-      const old = previous[index];
-      if (!old || landmark.visibility < MIN_SMOOTHING_VISIBILITY) return landmark;
-      return {
-        x: landmark.x * weight + old.x * (1 - weight),
-        y: landmark.y * weight + old.y * (1 - weight),
-        z: landmark.z * weight + old.z * (1 - weight),
-        visibility: landmark.visibility,
-      };
-    }),
+    landmarks: smoothLandmarks(frame.landmarks, previous, weight),
+    worldLandmarks: frame.worldLandmarks
+      ? smoothLandmarks(frame.worldLandmarks, previousWorld, weight)
+      : undefined,
   };
+}
+
+function smoothLandmarks(
+  current: NormalizedLandmark[],
+  previous: NormalizedLandmark[] | null,
+  weight: number,
+): NormalizedLandmark[] {
+  if (!previous) return current;
+  return current.map((landmark, index) => {
+    const old = previous[index];
+    if (!old || landmark.visibility < MIN_SMOOTHING_VISIBILITY) return landmark;
+    return {
+      x: landmark.x * weight + old.x * (1 - weight),
+      y: landmark.y * weight + old.y * (1 - weight),
+      z: landmark.z * weight + old.z * (1 - weight),
+      visibility: landmark.visibility,
+    };
+  });
 }

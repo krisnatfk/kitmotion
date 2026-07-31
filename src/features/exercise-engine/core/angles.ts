@@ -22,6 +22,24 @@ export function angleBetweenDegrees(
   return (angle * 180) / Math.PI;
 }
 
+/** Interior angle in metric world space, used when the body points into the camera. */
+export function angleBetweenDegrees3D(
+  a: NormalizedLandmark,
+  b: NormalizedLandmark,
+  c: NormalizedLandmark,
+): number {
+  const abX = a.x - b.x;
+  const abY = a.y - b.y;
+  const abZ = a.z - b.z;
+  const cbX = c.x - b.x;
+  const cbY = c.y - b.y;
+  const cbZ = c.z - b.z;
+  const abLength = Math.hypot(abX, abY, abZ) || 1;
+  const cbLength = Math.hypot(cbX, cbY, cbZ) || 1;
+  const cosine = (abX * cbX + abY * cbY + abZ * cbZ) / (abLength * cbLength);
+  return (Math.acos(Math.max(-1, Math.min(1, cosine))) * 180) / Math.PI;
+}
+
 /** Midpoint of two landmarks. */
 export function midpoint(
   a: NormalizedLandmark,

@@ -62,7 +62,61 @@ describe("checkReadiness", () => {
     setLandmark(lm, POSE_LANDMARKS.LEFT_ANKLE, 0.5, 0.9);
     expect(checkReadiness(lm, "push-up").status).toBe("wrong-pose");
   });
+
+  it("accepts a front-facing top plank using world-space depth", () => {
+    const { landmarks, worldLandmarks } = frontPushUpPose(false);
+    const result = checkReadiness(landmarks, "push-up", worldLandmarks);
+    expect(result.status).toBe("ready");
+    expect(result.cameraMode).toBe("front");
+  });
+
+  it("does not mistake a front-facing standing pose for a plank", () => {
+    const { landmarks, worldLandmarks } = frontPushUpPose(true);
+    expect(checkReadiness(landmarks, "push-up", worldLandmarks).status).toBe("wrong-pose");
+  });
 });
+
+function frontPushUpPose(standing: boolean) {
+  const landmarks = fullBody(0.1);
+  const worldLandmarks = fullBody(0.1);
+  const imagePoints: [number, number, number][] = [
+    [POSE_LANDMARKS.LEFT_SHOULDER, 0.42, 0.3],
+    [POSE_LANDMARKS.RIGHT_SHOULDER, 0.58, 0.3],
+    [POSE_LANDMARKS.LEFT_ELBOW, 0.32, 0.5],
+    [POSE_LANDMARKS.RIGHT_ELBOW, 0.68, 0.5],
+    [POSE_LANDMARKS.LEFT_WRIST, 0.2, 0.76],
+    [POSE_LANDMARKS.RIGHT_WRIST, 0.8, 0.76],
+    [POSE_LANDMARKS.LEFT_HIP, 0.46, 0.5],
+    [POSE_LANDMARKS.RIGHT_HIP, 0.54, 0.5],
+    [POSE_LANDMARKS.LEFT_KNEE, 0.47, 0.62],
+    [POSE_LANDMARKS.RIGHT_KNEE, 0.53, 0.62],
+    [POSE_LANDMARKS.LEFT_ANKLE, 0.48, 0.72],
+    [POSE_LANDMARKS.RIGHT_ANKLE, 0.52, 0.72],
+  ];
+  for (const [index, x, y] of imagePoints) setLandmark(landmarks, index, x, y);
+
+  const setWorld = (index: number, x: number, y: number, z: number) => {
+    worldLandmarks[index] = { x, y, z, visibility: 0.9 };
+  };
+  const shoulderY = standing ? -0.6 : 0;
+  const hipY = 0;
+  const ankleY = standing ? 0.7 : 0;
+  const hipZ = standing ? 0 : 0.6;
+  const ankleZ = standing ? 0 : 1.2;
+  setWorld(POSE_LANDMARKS.LEFT_SHOULDER, -0.2, shoulderY, 0);
+  setWorld(POSE_LANDMARKS.RIGHT_SHOULDER, 0.2, shoulderY, 0);
+  setWorld(POSE_LANDMARKS.LEFT_ELBOW, -0.2, shoulderY + 0.25, 0);
+  setWorld(POSE_LANDMARKS.RIGHT_ELBOW, 0.2, shoulderY + 0.25, 0);
+  setWorld(POSE_LANDMARKS.LEFT_WRIST, -0.2, shoulderY + 0.5, 0);
+  setWorld(POSE_LANDMARKS.RIGHT_WRIST, 0.2, shoulderY + 0.5, 0);
+  setWorld(POSE_LANDMARKS.LEFT_HIP, -0.12, hipY, hipZ);
+  setWorld(POSE_LANDMARKS.RIGHT_HIP, 0.12, hipY, hipZ);
+  setWorld(POSE_LANDMARKS.LEFT_KNEE, -0.1, (hipY + ankleY) / 2, (hipZ + ankleZ) / 2);
+  setWorld(POSE_LANDMARKS.RIGHT_KNEE, 0.1, (hipY + ankleY) / 2, (hipZ + ankleZ) / 2);
+  setWorld(POSE_LANDMARKS.LEFT_ANKLE, -0.08, ankleY, ankleZ);
+  setWorld(POSE_LANDMARKS.RIGHT_ANKLE, 0.08, ankleY, ankleZ);
+  return { landmarks, worldLandmarks };
+}
 
 describe("toPoseFrame", () => {
   it("keeps camera coordinates so the overlay can mirror exactly once", () => {

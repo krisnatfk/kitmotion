@@ -53,7 +53,7 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
   const session = useWorkoutSession({ engineKey, config, exerciseSlug, targetReps, targetSeconds, milestoneLevel });
 
   const handleFrame = useCallback((frame: PoseFrame) => {
-    const nextReadiness = checkReadiness(frame.landmarks, exerciseSlug);
+    const nextReadiness = checkReadiness(frame.landmarks, exerciseSlug, frame.worldLandmarks);
     setReadiness({ status: nextReadiness.status, message: nextReadiness.message });
     latestReady.current = nextReadiness.status === "ready";
     setLandmarks(frame.landmarks.length > 0 ? frame.landmarks : null);

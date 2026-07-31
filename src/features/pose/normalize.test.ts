@@ -11,4 +11,9 @@ describe("toPoseFrame", () => {
   it("can mirror explicitly for non-overlay consumers", () => {
     expect(toPoseFrame(landmarks, 100, true).landmarks[0]?.x).toBe(0.8);
   });
+
+  it("preserves MediaPipe world landmarks for depth-aware engines", () => {
+    const world = [{ x: 0.1, y: -0.2, z: 1.3, visibility: 0.8 }];
+    expect(toPoseFrame(landmarks, 100, false, world).worldLandmarks?.[0]).toEqual(world[0]);
+  });
 });
