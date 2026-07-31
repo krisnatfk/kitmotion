@@ -1,6 +1,7 @@
 import type { NormalizedLandmark } from "@/features/exercise-engine/core/types";
-import { angleBetweenDegrees, angleBetweenDegrees3D } from "@/features/exercise-engine/core/angles";
+import { angleBetweenDegrees } from "@/features/exercise-engine/core/angles";
 import { POSE_LANDMARKS } from "@/features/exercise-engine/core/landmarks";
+import { readFrontArmGeometry } from "@/features/exercise-engine/push-up/geometry";
 
 export type ReadinessStatus = "no-body" | "too-close" | "too-far" | "side-cut" | "wrong-pose" | "ready";
 
@@ -93,7 +94,7 @@ export function checkReadiness(
 
 function checkPushUpReadiness(
   landmarks: NormalizedLandmark[],
-  worldLandmarks: NormalizedLandmark[] | undefined,
+  _worldLandmarks: NormalizedLandmark[] | undefined,
   visible: (index: number) => boolean,
 ): ReadinessResult {
   const sides = [
@@ -127,6 +128,15 @@ function checkPushUpReadiness(
     })
     .sort((a, b) => b.horizontalRatio - a.horizontalRatio)[0];
 
+  // Prefer the unmistakable two-arm front stance before inspecting a single
+  // shoulder-to-ankle projection. Foreshortened legs can otherwise make one
+  // front-facing side look diagonal enough to be misclassified as side view.
+  const frontGeometry = readFrontArmGeometry(landmarks, MIN_CONFIDENCE);
+  if (frontGeometry?.stanceValid) {
+    const front = checkFrontPushUpReadiness(landmarks, visible);
+    if (front) return front;
+  }
+
   // A side view exposes body length in image space and remains the most precise
   // mode for evaluating the shoulder-hip-ankle line.
   if (side && side.horizontalRatio >= 0.65) {
@@ -135,7 +145,7 @@ function checkPushUpReadiness(
 
   // In a front view the shoulder-to-ankle line points into camera depth. Use
   // MediaPipe world coordinates so a real plank is not mistaken for standing.
-  const front = checkFrontPushUpReadiness(landmarks, worldLandmarks, visible);
+  const front = checkFrontPushUpReadiness(landmarks, visible);
   if (front) return front;
 
   if (!side) {
@@ -160,14 +170,22 @@ function checkSidePushUpReadiness(
   landmarks: NormalizedLandmark[],
   side: { shoulder: number; elbow: number; wrist: number; hip: number; knee: number; ankle: number },
 ): ReadinessResult {
-
   const shoulder = landmarks[side.shoulder]!;
   const elbow = landmarks[side.elbow]!;
   const wrist = landmarks[side.wrist]!;
   const hip = landmarks[side.hip]!;
+  const knee = landmarks[side.knee]!;
   const ankle = landmarks[side.ankle]!;
   const bodyLength = Math.hypot(ankle.x - shoulder.x, ankle.y - shoulder.y);
 
+  if ([shoulder, elbow, wrist, hip, knee, ankle].some(isNearFrameEdge)) {
+    return {
+      status: "side-cut",
+      message: "Tubuh terpotong di tepi kamera. Gunakan posisi depan, atau putar HP ke landscape jika memilih posisi samping.",
+      visibleLandmarks: 6,
+      cameraMode: "side",
+    };
+  }
   if (bodyLength < 0.38) {
     return {
       status: "too-far",
@@ -192,6 +210,15 @@ function checkSidePushUpReadiness(
     };
   }
 
+  if (angleBetweenDegrees(hip, knee, ankle) < 145) {
+    return {
+      status: "wrong-pose",
+      message: "Luruskan lutut dan bertumpu pada ujung kaki. Posisi berlutut belum dihitung sebagai plank atas.",
+      visibleLandmarks: 6,
+      cameraMode: "side",
+    };
+  }
+
   if (angleBetweenDegrees(shoulder, elbow, wrist) < 145) {
     return {
       status: "wrong-pose",
@@ -210,41 +237,37 @@ function checkSidePushUpReadiness(
 
 function checkFrontPushUpReadiness(
   landmarks: NormalizedLandmark[],
-  worldLandmarks: NormalizedLandmark[] | undefined,
   visible: (index: number) => boolean,
 ): ReadinessResult | null {
-  if (!worldLandmarks || worldLandmarks.length < 33) return null;
+  const frontArms = readFrontArmGeometry(landmarks, MIN_CONFIDENCE);
+  if (!frontArms) return null;
+  const hasHip = visible(POSE_LANDMARKS.LEFT_HIP) || visible(POSE_LANDMARKS.RIGHT_HIP);
+  if (!hasHip) {
+    return {
+      status: "side-cut",
+      message: "Kedua lengan sudah terbaca. Mundur sedikit sampai pinggul juga terlihat untuk mengunci posisi awal.",
+      visibleLandmarks: 6,
+      cameraMode: "front",
+    };
+  }
+  if (!frontArms.stanceValid) {
+    return {
+      status: "wrong-pose",
+      message: "Letakkan kedua tangan sedikit lebih lebar dari bahu dan sejajar. Arahkan tubuh lurus menjauhi kamera.",
+      visibleLandmarks: 7,
+      cameraMode: "front",
+    };
+  }
 
-  const requiredBoth = [
+  const framingIndices = [
     POSE_LANDMARKS.LEFT_SHOULDER,
     POSE_LANDMARKS.RIGHT_SHOULDER,
     POSE_LANDMARKS.LEFT_ELBOW,
     POSE_LANDMARKS.RIGHT_ELBOW,
     POSE_LANDMARKS.LEFT_WRIST,
     POSE_LANDMARKS.RIGHT_WRIST,
-  ];
-  const hasHip = visible(POSE_LANDMARKS.LEFT_HIP) || visible(POSE_LANDMARKS.RIGHT_HIP);
-  const hasKnee = visible(POSE_LANDMARKS.LEFT_KNEE) || visible(POSE_LANDMARKS.RIGHT_KNEE);
-  const hasAnkle = visible(POSE_LANDMARKS.LEFT_ANKLE) || visible(POSE_LANDMARKS.RIGHT_ANKLE);
-  if (!requiredBoth.every(visible) || !hasHip || !hasKnee || !hasAnkle) return null;
-
-  const worldVisible = (index: number) =>
-    worldLandmarks[index] !== undefined && (worldLandmarks[index]?.visibility ?? 0) >= MIN_CONFIDENCE;
-  if (!requiredBoth.every(worldVisible)) return null;
-
-  const shoulder = pairedPoint(worldLandmarks, POSE_LANDMARKS.LEFT_SHOULDER, POSE_LANDMARKS.RIGHT_SHOULDER, worldVisible);
-  const hip = pairedPoint(worldLandmarks, POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP, worldVisible);
-  const ankle = pairedPoint(worldLandmarks, POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE, worldVisible);
-  if (!shoulder || !hip || !ankle) return null;
-
-  const framingIndices = [
-    ...requiredBoth,
     POSE_LANDMARKS.LEFT_HIP,
     POSE_LANDMARKS.RIGHT_HIP,
-    POSE_LANDMARKS.LEFT_KNEE,
-    POSE_LANDMARKS.RIGHT_KNEE,
-    POSE_LANDMARKS.LEFT_ANKLE,
-    POSE_LANDMARKS.RIGHT_ANKLE,
   ].filter(visible);
   const xs = framingIndices.map((index) => landmarks[index]!.x);
   const ys = framingIndices.map((index) => landmarks[index]!.y);
@@ -266,38 +289,7 @@ function checkFrontPushUpReadiness(
     };
   }
 
-  const bodyLength = distance3D(shoulder, ankle);
-  if (bodyLength < 0.35) return null;
-  const horizontalRatio = Math.hypot(ankle.x - shoulder.x, ankle.z - shoulder.z) / bodyLength;
-  if (horizontalRatio < 0.6) {
-    return {
-      status: "wrong-pose",
-      message: "Ambil posisi plank atas. Tubuh harus memanjang menjauhi kamera dan sejajar lantai.",
-      visibleLandmarks: framingIndices.length,
-      cameraMode: "front",
-    };
-  }
-
-  if (pointLineDistanceRatio3D(hip, shoulder, ankle) > 0.2) {
-    return {
-      status: "wrong-pose",
-      message: "Luruskan posisi plank. Jangan biarkan pinggul terlalu naik atau turun.",
-      visibleLandmarks: framingIndices.length,
-      cameraMode: "front",
-    };
-  }
-
-  const leftElbow = angleBetweenDegrees3D(
-    worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER]!,
-    worldLandmarks[POSE_LANDMARKS.LEFT_ELBOW]!,
-    worldLandmarks[POSE_LANDMARKS.LEFT_WRIST]!,
-  );
-  const rightElbow = angleBetweenDegrees3D(
-    worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER]!,
-    worldLandmarks[POSE_LANDMARKS.RIGHT_ELBOW]!,
-    worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST]!,
-  );
-  if (Math.min(leftElbow, rightElbow) < 145) {
+  if (Math.min(frontArms.leftElbowAngle, frontArms.rightElbowAngle) < 145) {
     return {
       status: "wrong-pose",
       message: "Mulai dari plank atas: luruskan kedua siku sebelum tubuh diturunkan.",
@@ -325,45 +317,6 @@ function pointLineDistanceRatio(
   return Math.abs(dy * point.x - dx * point.y + end.x * start.y - end.y * start.x) / (length * length);
 }
 
-function pairedPoint(
-  landmarks: NormalizedLandmark[],
-  leftIndex: number,
-  rightIndex: number,
-  visible: (index: number) => boolean,
-): NormalizedLandmark | null {
-  const left = visible(leftIndex) ? landmarks[leftIndex] : undefined;
-  const right = visible(rightIndex) ? landmarks[rightIndex] : undefined;
-  if (left && right) {
-    return {
-      x: (left.x + right.x) / 2,
-      y: (left.y + right.y) / 2,
-      z: (left.z + right.z) / 2,
-      visibility: Math.min(left.visibility, right.visibility),
-    };
-  }
-  return left ?? right ?? null;
-}
-
-function distance3D(a: NormalizedLandmark, b: NormalizedLandmark): number {
-  return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
-}
-
-function pointLineDistanceRatio3D(
-  point: NormalizedLandmark,
-  start: NormalizedLandmark,
-  end: NormalizedLandmark,
-): number {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const dz = end.z - start.z;
-  const lengthSquared = dx * dx + dy * dy + dz * dz;
-  if (lengthSquared === 0) return 1;
-  const t = ((point.x - start.x) * dx + (point.y - start.y) * dy + (point.z - start.z) * dz) / lengthSquared;
-  const projected = {
-    x: start.x + t * dx,
-    y: start.y + t * dy,
-    z: start.z + t * dz,
-    visibility: point.visibility,
-  };
-  return distance3D(point, projected) / Math.sqrt(lengthSquared);
+function isNearFrameEdge(landmark: NormalizedLandmark): boolean {
+  return landmark.x < 0.04 || landmark.x > 0.96 || landmark.y < 0.04 || landmark.y > 0.96;
 }

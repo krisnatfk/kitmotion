@@ -70,9 +70,46 @@ describe("checkReadiness", () => {
     expect(result.cameraMode).toBe("front");
   });
 
+  it("accepts the photographed front stance when legs overlap in perspective", () => {
+    const { landmarks } = frontPushUpPose(false);
+    for (const index of [
+      POSE_LANDMARKS.LEFT_KNEE,
+      POSE_LANDMARKS.RIGHT_KNEE,
+      POSE_LANDMARKS.LEFT_ANKLE,
+      POSE_LANDMARKS.RIGHT_ANKLE,
+    ]) {
+      landmarks[index] = { ...landmarks[index]!, visibility: 0.1 };
+    }
+    const result = checkReadiness(landmarks, "push-up");
+    expect(result.status).toBe("ready");
+    expect(result.cameraMode).toBe("front");
+  });
+
   it("does not mistake a front-facing standing pose for a plank", () => {
     const { landmarks, worldLandmarks } = frontPushUpPose(true);
     expect(checkReadiness(landmarks, "push-up", worldLandmarks).status).toBe("wrong-pose");
+  });
+
+  it("rejects a side-facing knee push-up as the standard starting plank", () => {
+    const lm = fullBody(0.1);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_SHOULDER, 0.2, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_ELBOW, 0.3, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_WRIST, 0.4, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_HIP, 0.48, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_KNEE, 0.64, 0.7);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_ANKLE, 0.8, 0.5);
+    expect(checkReadiness(lm, "push-up").status).toBe("wrong-pose");
+  });
+
+  it("rejects a side view whose hand is cut by the frame edge", () => {
+    const lm = fullBody(0.1);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_SHOULDER, 0.2, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_ELBOW, 0.5, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_WRIST, 0.98, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_HIP, 0.48, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_KNEE, 0.64, 0.5);
+    setLandmark(lm, POSE_LANDMARKS.LEFT_ANKLE, 0.8, 0.5);
+    expect(checkReadiness(lm, "push-up").status).toBe("side-cut");
   });
 });
 
@@ -94,6 +131,12 @@ function frontPushUpPose(standing: boolean) {
     [POSE_LANDMARKS.RIGHT_ANKLE, 0.52, 0.72],
   ];
   for (const [index, x, y] of imagePoints) setLandmark(landmarks, index, x, y);
+  if (standing) {
+    setLandmark(landmarks, POSE_LANDMARKS.LEFT_ELBOW, 0.44, 0.5);
+    setLandmark(landmarks, POSE_LANDMARKS.RIGHT_ELBOW, 0.56, 0.5);
+    setLandmark(landmarks, POSE_LANDMARKS.LEFT_WRIST, 0.46, 0.72);
+    setLandmark(landmarks, POSE_LANDMARKS.RIGHT_WRIST, 0.54, 0.72);
+  }
 
   const setWorld = (index: number, x: number, y: number, z: number) => {
     worldLandmarks[index] = { x, y, z, visibility: 0.9 };

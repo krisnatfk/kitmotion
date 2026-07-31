@@ -81,6 +81,42 @@ function frontPushUpFrame(
     [POSE_LANDMARKS.RIGHT_ANKLE, 0.52, 0.72],
   ];
   for (const [index, x, y] of imagePoints) setImage(index, x, y);
+  const setImageArm = (side: "left" | "right", angle: number) => {
+    const shoulderIndex = side === "left"
+      ? POSE_LANDMARKS.LEFT_SHOULDER
+      : POSE_LANDMARKS.RIGHT_SHOULDER;
+    const elbowIndex = side === "left"
+      ? POSE_LANDMARKS.LEFT_ELBOW
+      : POSE_LANDMARKS.RIGHT_ELBOW;
+    const wristIndex = side === "left"
+      ? POSE_LANDMARKS.LEFT_WRIST
+      : POSE_LANDMARKS.RIGHT_WRIST;
+    const shoulder = landmarks[shoulderIndex]!;
+    const wrist = landmarks[wristIndex]!;
+    const chordX = wrist.x - shoulder.x;
+    const chordY = wrist.y - shoulder.y;
+    const chordLength = Math.hypot(chordX, chordY);
+    const height = chordLength / (2 * Math.tan((angle * Math.PI) / 360));
+    const perpendicularX = side === "left"
+      ? -chordY / chordLength
+      : chordY / chordLength;
+    const perpendicularY = side === "left"
+      ? chordX / chordLength
+      : -chordX / chordLength;
+    setImage(
+      elbowIndex,
+      (shoulder.x + wrist.x) / 2 + perpendicularX * height,
+      (shoulder.y + wrist.y) / 2 + perpendicularY * height,
+    );
+  };
+  setImageArm("left", leftElbowAngle);
+  setImageArm("right", options.rightElbowAngle ?? leftElbowAngle);
+  if (options.standing) {
+    setImage(POSE_LANDMARKS.LEFT_ELBOW, 0.44, 0.5);
+    setImage(POSE_LANDMARKS.RIGHT_ELBOW, 0.56, 0.5);
+    setImage(POSE_LANDMARKS.LEFT_WRIST, 0.46, 0.72);
+    setImage(POSE_LANDMARKS.RIGHT_WRIST, 0.54, 0.72);
+  }
 
   const setWorld = (index: number, x: number, y: number, z: number) => {
     worldLandmarks[index] = { x, y, z, visibility: 1 };
@@ -157,6 +193,37 @@ function driveOneFrontPushUp(
   return timestamp;
 }
 
+function driveOneFrontArmOnlyPushUp(engine: PushUpEngine, startMs: number): number {
+  let timestamp = startMs;
+  const confirm = (angle: number) => {
+    for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.debounceFrames + 1; index += 1) {
+      const frame = frontPushUpFrame(angle, timestamp);
+      frame.worldLandmarks = undefined;
+      for (const landmarkIndex of [
+        POSE_LANDMARKS.LEFT_HIP,
+        POSE_LANDMARKS.RIGHT_HIP,
+        POSE_LANDMARKS.LEFT_KNEE,
+        POSE_LANDMARKS.RIGHT_KNEE,
+        POSE_LANDMARKS.LEFT_ANKLE,
+        POSE_LANDMARKS.RIGHT_ANKLE,
+      ]) {
+        frame.landmarks[landmarkIndex] = {
+          ...frame.landmarks[landmarkIndex]!,
+          visibility: 0,
+        };
+      }
+      engine.processFrame(frame);
+      timestamp += 100;
+    }
+  };
+  confirm(170);
+  confirm(130);
+  confirm(80);
+  confirm(120);
+  confirm(170);
+  return timestamp;
+}
+
 describe("PushUpEngine", () => {
   it("starts in setup and requires a stable top plank", () => {
     const engine = new PushUpEngine();
@@ -228,6 +295,18 @@ describe("PushUpEngine", () => {
     expect(result.validReps).toBe(1);
   });
 
+  it("keeps counting from both front arms when the lower body is occluded", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    const end = driveOneFrontArmOnlyPushUp(engine, 0);
+    const finalFrame = frontPushUpFrame(170, end);
+    finalFrame.worldLandmarks = undefined;
+    const result = engine.processFrame(finalFrame);
+    expect(result.trackingValid).toBe(true);
+    expect(result.repCount).toBe(1);
+    expect(result.validReps).toBe(1);
+  });
+
   it("rejects front-facing arm motion while the body is standing", () => {
     const engine = new PushUpEngine();
     engine.initialize({});
@@ -249,6 +328,20 @@ describe("PushUpEngine", () => {
     expect(metrics.totalReps).toBe(1);
     expect(metrics.invalidReps).toBe(1);
     expect(metrics.repetitions[0]?.metrics.issueCodes).toContain("elbows-asymmetric");
+  });
+
+  it("does not arm a side-facing knee push-up", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    let result = engine.processFrame(pushUpFrame(170, 0));
+    for (let index = 1; index <= PUSH_UP_DEFAULT_CONFIG.debounceFrames + 2; index += 1) {
+      const frame = pushUpFrame(170, index * 100);
+      frame.landmarks[POSE_LANDMARKS.LEFT_KNEE] = { x: 0.75, y: 0.72, z: 0, visibility: 1 };
+      frame.landmarks[POSE_LANDMARKS.RIGHT_KNEE] = { x: 0.75, y: 0.72, z: 0, visibility: 1 };
+      result = engine.processFrame(frame);
+    }
+    expect(result.phase).toBe(PushUpPhase.SETUP);
+    expect(result.repCount).toBe(0);
   });
 
   it("marks a full cycle invalid when the hips sag", () => {

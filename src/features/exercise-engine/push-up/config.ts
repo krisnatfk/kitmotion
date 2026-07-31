@@ -1,7 +1,7 @@
 import type { ExerciseConfig } from "../core/types";
 
 export const PUSH_UP_ENGINE_KEY = "push-up";
-export const PUSH_UP_SCORING_VERSION = "cam-v4";
+export const PUSH_UP_SCORING_VERSION = "cam-v5";
 
 export interface PushUpConfig {
   /** Elbow angle (shoulder-elbow-wrist) at or below which the rep is "down". */
@@ -16,8 +16,8 @@ export interface PushUpConfig {
   elbowSymmetryMaxDelta: number;
   /** Minimum horizontal component of the shoulder-to-ankle body line (0..1). */
   bodyHorizontalMinRatio: number;
-  /** Minimum world-space horizontal component when the camera faces the user. */
-  frontBodyHorizontalMinRatio: number;
+  /** Minimum hip-knee-ankle angle for a standard side-view plank. */
+  kneeStraightMin: number;
   debounceFrames: number;
   minConfidence: number;
   tempoFastMs: number;
@@ -32,7 +32,7 @@ export const PUSH_UP_DEFAULT_CONFIG: PushUpConfig = {
   hipRiseMaxRise: 0.12,
   elbowSymmetryMaxDelta: 18,
   bodyHorizontalMinRatio: 0.65,
-  frontBodyHorizontalMinRatio: 0.6,
+  kneeStraightMin: 145,
   debounceFrames: 3,
   minConfidence: 0.5,
   tempoFastMs: 400,

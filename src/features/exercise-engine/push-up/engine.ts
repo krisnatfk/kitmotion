@@ -9,7 +9,7 @@ import type {
   RepRecord,
   FeedbackSummary,
 } from "../core/types";
-import { angleBetweenDegrees, angleBetweenDegrees3D, scoreFromRange } from "../core/angles";
+import { angleBetweenDegrees, scoreFromRange } from "../core/angles";
 import { POSE_LANDMARKS } from "../core/landmarks";
 import { PushUpPhase } from "./phases";
 import { PUSH_UP_FEEDBACK } from "./feedback";
@@ -18,6 +18,7 @@ import {
   parsePushUpConfig,
   type PushUpConfig,
 } from "./config";
+import { readFrontArmGeometry } from "./geometry";
 
 interface PushUpRep {
   startedAtMs: number;
@@ -28,6 +29,7 @@ interface PushUpRep {
   maxHipAbsDeviation: number;
   minBodyHorizontalMargin: number;
   maxElbowAsymmetry: number;
+  keptLegsStraight: boolean;
   reachedDown: boolean;
   issueCodes: Set<string>;
   valid: boolean;
@@ -40,6 +42,7 @@ interface PushUpKinematics {
   elbowAsymmetry: number;
   bodyHorizontalRatio: number;
   requiredHorizontalRatio: number;
+  legStraight: boolean;
 }
 
 /**
@@ -94,6 +97,7 @@ export class PushUpEngine implements ExerciseEngine {
       elbowAsymmetry,
       bodyHorizontalRatio,
       requiredHorizontalRatio,
+      legStraight,
     } = this.readKinematics(frame);
 
     if (!trackingValid) {
@@ -103,18 +107,19 @@ export class PushUpEngine implements ExerciseEngine {
 
     const bodyHorizontal = bodyHorizontalRatio >= requiredHorizontalRatio;
     const plankReady = bodyHorizontal
+      && legStraight
       && hipDeviation >= -this.config.hipSagMaxDrop
       && hipDeviation <= this.config.hipRiseMaxRise
       && elbowAngle >= this.config.elbowUpMin - 5;
     const feedback: FrameFeedback[] = [];
-    this.evaluateIssues(elbowAngle, hipDeviation, elbowAsymmetry, bodyHorizontal, feedback);
+    this.evaluateIssues(elbowAngle, hipDeviation, elbowAsymmetry, bodyHorizontal, legStraight, feedback);
 
     if (this.phase === PushUpPhase.SETUP) {
       this.advance(elbowAngle, plankReady, frame.timestampMs);
       return this.result(feedback, true, elbowAngle);
     }
 
-    if (!bodyHorizontal) {
+    if (!bodyHorizontal || !legStraight) {
       this.orientationLossFrames += 1;
       if (this.orientationLossFrames >= this.config.debounceFrames) this.abortIncompleteRep();
       return this.result(feedback, true, elbowAngle);
@@ -131,6 +136,7 @@ export class PushUpEngine implements ExerciseEngine {
         this.currentRep.minBodyHorizontalMargin,
         bodyHorizontalRatio - requiredHorizontalRatio,
       );
+      this.currentRep.keptLegsStraight = this.currentRep.keptLegsStraight && legStraight;
     }
 
     const repetitionsBefore = this.repetitions.length;
@@ -181,6 +187,8 @@ export class PushUpEngine implements ExerciseEngine {
     const rWrist = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
     const lHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
     const rHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
+    const lKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
+    const rKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
     const lAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
     const rAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
 
@@ -189,19 +197,30 @@ export class PushUpEngine implements ExerciseEngine {
       visible(lElbow, cfg.minConfidence) &&
       visible(lWrist, cfg.minConfidence) &&
       visible(lHip, cfg.minConfidence) &&
+      visible(lKnee, cfg.minConfidence) &&
       visible(lAnkle, cfg.minConfidence);
     const rightOk =
       visible(rShoulder, cfg.minConfidence) &&
       visible(rElbow, cfg.minConfidence) &&
       visible(rWrist, cfg.minConfidence) &&
       visible(rHip, cfg.minConfidence) &&
+      visible(rKnee, cfg.minConfidence) &&
       visible(rAnkle, cfg.minConfidence);
 
     const sideOptions = [
-      leftOk ? sideKinematics(lShoulder!, lElbow!, lWrist!, lHip!, lAnkle!, cfg.bodyHorizontalMinRatio) : null,
-      rightOk ? sideKinematics(rShoulder!, rElbow!, rWrist!, rHip!, rAnkle!, cfg.bodyHorizontalMinRatio) : null,
+      leftOk
+        ? sideKinematics(lShoulder!, lElbow!, lWrist!, lHip!, lKnee!, lAnkle!, cfg)
+        : null,
+      rightOk
+        ? sideKinematics(rShoulder!, rElbow!, rWrist!, rHip!, rKnee!, rAnkle!, cfg)
+        : null,
     ].filter((value): value is PushUpKinematics => value !== null);
     const bestSide = sideOptions.sort((a, b) => b.bodyHorizontalRatio - a.bodyHorizontalRatio)[0];
+
+    const frontArmGeometry = readFrontArmGeometry(landmarks, cfg.minConfidence);
+    if (frontArmGeometry?.trackingValid) {
+      return frontArmKinematics(landmarks, cfg)!;
+    }
 
     if (bestSide && bestSide.bodyHorizontalRatio >= cfg.bodyHorizontalMinRatio) {
       if (leftOk && rightOk) {
@@ -213,8 +232,7 @@ export class PushUpEngine implements ExerciseEngine {
       return bestSide;
     }
 
-    const front = frontKinematics(frame.worldLandmarks, cfg);
-    return front ?? bestSide ?? invalidKinematics(cfg.bodyHorizontalMinRatio);
+    return bestSide ?? invalidKinematics(cfg.bodyHorizontalMinRatio);
   }
 
   private evaluateIssues(
@@ -222,6 +240,7 @@ export class PushUpEngine implements ExerciseEngine {
     hipDeviation: number,
     elbowAsymmetry: number,
     bodyHorizontal: boolean,
+    legStraight: boolean,
     feedback: FrameFeedback[],
   ): void {
     const cfg = this.config;
@@ -229,6 +248,7 @@ export class PushUpEngine implements ExerciseEngine {
 
     if (!bodyHorizontal) push(codes, feedback, "body-not-horizontal", PUSH_UP_FEEDBACK);
     if (this.phase === PushUpPhase.SETUP && !bodyHorizontal) push(codes, feedback, "plank-required", PUSH_UP_FEEDBACK);
+    if (!legStraight) push(codes, feedback, "knees-bent", PUSH_UP_FEEDBACK);
     if (hipDeviation < -cfg.hipSagMaxDrop) push(codes, feedback, "hips-too-low", PUSH_UP_FEEDBACK);
     if (hipDeviation > cfg.hipRiseMaxRise) push(codes, feedback, "hips-too-high", PUSH_UP_FEEDBACK);
     if (elbowAsymmetry > cfg.elbowSymmetryMaxDelta) push(codes, feedback, "elbows-asymmetric", PUSH_UP_FEEDBACK);
@@ -305,6 +325,7 @@ export class PushUpEngine implements ExerciseEngine {
         maxHipAbsDeviation: 0,
         minBodyHorizontalMargin: 1,
         maxElbowAsymmetry: 0,
+        keptLegsStraight: true,
         reachedDown: false,
         issueCodes: new Set<string>(),
         valid: false,
@@ -334,7 +355,12 @@ export class PushUpEngine implements ExerciseEngine {
     const elbowsAligned = rep.maxElbowAsymmetry <= cfg.elbowSymmetryMaxDelta;
     const hipsAligned = rep.maxHipSag <= cfg.hipSagMaxDrop && rep.maxHipRise <= cfg.hipRiseMaxRise;
     const stayedHorizontal = rep.minBodyHorizontalMargin >= 0;
-    rep.valid = bentEnough && elbowsAligned && hipsAligned && stayedHorizontal && tempoMs >= cfg.tempoFastMs;
+    rep.valid = bentEnough
+      && elbowsAligned
+      && hipsAligned
+      && stayedHorizontal
+      && rep.keptLegsStraight
+      && tempoMs >= cfg.tempoFastMs;
 
     if (rep.valid) {
       this.validReps += 1;
@@ -345,6 +371,7 @@ export class PushUpEngine implements ExerciseEngine {
       if (rep.maxHipSag > cfg.hipSagMaxDrop) rep.issueCodes.add("hips-too-low");
       if (rep.maxHipRise > cfg.hipRiseMaxRise) rep.issueCodes.add("hips-too-high");
       if (!stayedHorizontal) rep.issueCodes.add("body-not-horizontal");
+      if (!rep.keptLegsStraight) rep.issueCodes.add("knees-bent");
       if (tempoMs < cfg.tempoFastMs) rep.issueCodes.add("tempo-fast");
       if (tempoMs > cfg.tempoSlowMs) rep.issueCodes.add("tempo-slow");
     }
@@ -427,6 +454,7 @@ function invalidKinematics(requiredHorizontalRatio: number): PushUpKinematics {
     elbowAsymmetry: 0,
     bodyHorizontalRatio: 0,
     requiredHorizontalRatio,
+    legStraight: false,
   };
 }
 
@@ -435,8 +463,9 @@ function sideKinematics(
   elbow: NormalizedLandmark,
   wrist: NormalizedLandmark,
   hip: NormalizedLandmark,
+  knee: NormalizedLandmark,
   ankle: NormalizedLandmark,
-  requiredHorizontalRatio: number,
+  config: PushUpConfig,
 ): PushUpKinematics {
   const bodyLength = Math.hypot(ankle.x - shoulder.x, ankle.y - shoulder.y) || 1;
   const dx = ankle.x - shoulder.x;
@@ -451,110 +480,28 @@ function sideKinematics(
     hipDeviation: hip.y > projectedY ? -deviation : deviation,
     elbowAsymmetry: 0,
     bodyHorizontalRatio: Math.abs(dx) / bodyLength,
-    requiredHorizontalRatio,
+    requiredHorizontalRatio: config.bodyHorizontalMinRatio,
+    legStraight: angleBetweenDegrees(hip, knee, ankle) >= config.kneeStraightMin,
   };
 }
 
-function frontKinematics(
-  worldLandmarks: NormalizedLandmark[] | undefined,
+function frontArmKinematics(
+  landmarks: NormalizedLandmark[],
   config: PushUpConfig,
 ): PushUpKinematics | null {
-  if (!worldLandmarks || worldLandmarks.length < 33) return null;
-  const required = [
-    POSE_LANDMARKS.LEFT_SHOULDER,
-    POSE_LANDMARKS.RIGHT_SHOULDER,
-    POSE_LANDMARKS.LEFT_ELBOW,
-    POSE_LANDMARKS.RIGHT_ELBOW,
-    POSE_LANDMARKS.LEFT_WRIST,
-    POSE_LANDMARKS.RIGHT_WRIST,
-  ];
-  if (!required.every((index) => visible(worldLandmarks[index], config.minConfidence))) return null;
-
-  const shoulder = pairedWorldPoint(
-    worldLandmarks,
-    POSE_LANDMARKS.LEFT_SHOULDER,
-    POSE_LANDMARKS.RIGHT_SHOULDER,
-    config.minConfidence,
-  );
-  const hip = pairedWorldPoint(
-    worldLandmarks,
-    POSE_LANDMARKS.LEFT_HIP,
-    POSE_LANDMARKS.RIGHT_HIP,
-    config.minConfidence,
-  );
-  const ankle = pairedWorldPoint(
-    worldLandmarks,
-    POSE_LANDMARKS.LEFT_ANKLE,
-    POSE_LANDMARKS.RIGHT_ANKLE,
-    config.minConfidence,
-  );
-  if (!shoulder || !hip || !ankle) return null;
-
-  const leftElbow = angleBetweenDegrees3D(
-    worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER]!,
-    worldLandmarks[POSE_LANDMARKS.LEFT_ELBOW]!,
-    worldLandmarks[POSE_LANDMARKS.LEFT_WRIST]!,
-  );
-  const rightElbow = angleBetweenDegrees3D(
-    worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER]!,
-    worldLandmarks[POSE_LANDMARKS.RIGHT_ELBOW]!,
-    worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST]!,
-  );
-  const bodyLength = distance3D(shoulder, ankle);
-  if (bodyLength < 0.35) return null;
-
+  const geometry = readFrontArmGeometry(landmarks, config.minConfidence);
+  if (!geometry?.trackingValid) return null;
   return {
     trackingValid: true,
-    elbowAngle: (leftElbow + rightElbow) / 2,
-    hipDeviation: signedPointLineDeviation3D(hip, shoulder, ankle),
-    elbowAsymmetry: Math.abs(leftElbow - rightElbow),
-    bodyHorizontalRatio: Math.hypot(ankle.x - shoulder.x, ankle.z - shoulder.z) / bodyLength,
-    requiredHorizontalRatio: config.frontBodyHorizontalMinRatio,
+    elbowAngle: geometry.elbowAngle,
+    hipDeviation: 0,
+    elbowAsymmetry: geometry.elbowAsymmetry,
+    bodyHorizontalRatio: 1,
+    requiredHorizontalRatio: 0,
+    // Legs are occluded in this mode, not known to be bent. Readiness already
+    // locked a front plank before the active session entered this fallback.
+    legStraight: true,
   };
-}
-
-function pairedWorldPoint(
-  landmarks: NormalizedLandmark[],
-  leftIndex: number,
-  rightIndex: number,
-  minConfidence: number,
-): NormalizedLandmark | null {
-  const left = visible(landmarks[leftIndex], minConfidence) ? landmarks[leftIndex] : undefined;
-  const right = visible(landmarks[rightIndex], minConfidence) ? landmarks[rightIndex] : undefined;
-  if (left && right) {
-    return {
-      x: (left.x + right.x) / 2,
-      y: (left.y + right.y) / 2,
-      z: (left.z + right.z) / 2,
-      visibility: Math.min(left.visibility, right.visibility),
-    };
-  }
-  return left ?? right ?? null;
-}
-
-function distance3D(a: NormalizedLandmark, b: NormalizedLandmark): number {
-  return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
-}
-
-function signedPointLineDeviation3D(
-  point: NormalizedLandmark,
-  start: NormalizedLandmark,
-  end: NormalizedLandmark,
-): number {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const dz = end.z - start.z;
-  const lengthSquared = dx * dx + dy * dy + dz * dz;
-  if (lengthSquared === 0) return 1;
-  const t = ((point.x - start.x) * dx + (point.y - start.y) * dy + (point.z - start.z) * dz) / lengthSquared;
-  const projected = {
-    x: start.x + t * dx,
-    y: start.y + t * dy,
-    z: start.z + t * dz,
-    visibility: point.visibility,
-  };
-  const deviation = distance3D(point, projected) / Math.sqrt(lengthSquared);
-  return point.y > projected.y ? -deviation : deviation;
 }
 
 function push(
