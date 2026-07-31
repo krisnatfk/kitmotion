@@ -15,11 +15,15 @@ export interface NormalizedLandmark {
   visibility: number;
 }
 
+export type PoseCameraMode = "front" | "side";
+
 /** One pose sample delivered to the engine. */
 export interface PoseFrame {
   landmarks: NormalizedLandmark[];
   /** MediaPipe metric 3D landmarks. Needed when body depth is hidden by a front camera view. */
   worldLandmarks?: NormalizedLandmark[];
+  /** Camera geometry locked when the session starts. */
+  cameraMode?: PoseCameraMode;
   timestampMs: number;
 }
 
@@ -69,6 +73,13 @@ export interface ExerciseFrameResult {
   trackingValid: boolean;
   /** Optional live metric for display (e.g. current knee angle). */
   liveMetric?: { label: string; value: number };
+  diagnostics?: {
+    cameraMode?: PoseCameraMode;
+    leftElbowAngle?: number;
+    rightElbowAngle?: number;
+    trackingMessage?: string;
+    bodyAligned?: boolean;
+  };
 }
 
 /** Final aggregate produced by finalize(). */
@@ -97,5 +108,7 @@ export interface ExerciseEngine {
   initialize(config: ExerciseConfig): void;
   processFrame(frame: PoseFrame): ExerciseFrameResult;
   finalize(): ExerciseSessionMetrics;
+  /** Discard only an incomplete repetition after a camera discontinuity. */
+  interruptTracking(): void;
   reset(): void;
 }

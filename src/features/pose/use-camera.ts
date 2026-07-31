@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { DeviceOrientation } from "./use-device-orientation";
 
 export type CameraStatus =
   | "idle"
@@ -17,9 +18,12 @@ export interface UseCamera {
   error: string | null;
   facingMode: CameraFacingMode;
   isMirrored: boolean;
+  frameSize: { width: number; height: number } | null;
+  frameAspectRatio: number | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  start: (mode?: CameraFacingMode) => Promise<boolean>;
-  selectFacingMode: (mode: CameraFacingMode) => Promise<boolean>;
+  start: (mode?: CameraFacingMode, orientation?: DeviceOrientation) => Promise<boolean>;
+  selectFacingMode: (mode: CameraFacingMode, orientation?: DeviceOrientation) => Promise<boolean>;
+  reconfigure: (orientation: DeviceOrientation) => Promise<boolean>;
   stop: () => void;
 }
 
@@ -32,9 +36,11 @@ export interface UseCamera {
 export function useCamera(): UseCamera {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const requestGenerationRef = useRef(0);
   const [status, setStatus] = useState<CameraStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<CameraFacingMode>("user");
+  const [frameSize, setFrameSize] = useState<{ width: number; height: number } | null>(null);
 
   const releaseStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -43,31 +49,53 @@ export function useCamera(): UseCamera {
   }, []);
 
   const stop = useCallback(() => {
+    requestGenerationRef.current += 1;
     releaseStream();
+    setFrameSize(null);
     setStatus("idle");
   }, [releaseStream]);
 
-  const start = useCallback(async (requestedMode: CameraFacingMode = facingMode) => {
+  const start = useCallback(async (
+    requestedMode: CameraFacingMode = facingMode,
+    orientation: DeviceOrientation = readDeviceOrientation(),
+  ) => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setStatus("unsupported");
       setError("Kamera tidak didukung di perangkat ini.");
       return false;
     }
 
+    const generation = requestGenerationRef.current + 1;
+    requestGenerationRef.current = generation;
     releaseStream();
+    setFrameSize(null);
     setStatus("requesting");
     setError(null);
     try {
-      const stream = await requestCameraStream(requestedMode);
+      const stream = await requestCameraStream(requestedMode, orientation);
+      if (generation !== requestGenerationRef.current) {
+        stopStream(stream);
+        return false;
+      }
       streamRef.current = stream;
       setFacingMode(requestedMode);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await waitForVideoMetadata(videoRef.current);
         await videoRef.current.play().catch(() => undefined);
+        if (generation !== requestGenerationRef.current) {
+          stopStream(stream);
+          return false;
+        }
+        const trackSettings = stream.getVideoTracks()[0]?.getSettings?.();
+        const width = videoRef.current.videoWidth || trackSettings?.width || 0;
+        const height = videoRef.current.videoHeight || trackSettings?.height || 0;
+        if (width > 0 && height > 0) setFrameSize({ width, height });
       }
       setStatus("ready");
       return true;
     } catch (cause) {
+      if (generation !== requestGenerationRef.current) return false;
       const cameraError = describeCameraError(cause, requestedMode);
       setStatus(cameraError.status);
       setError(cameraError.message);
@@ -75,15 +103,23 @@ export function useCamera(): UseCamera {
     }
   }, [facingMode, releaseStream]);
 
-  const selectFacingMode = useCallback(async (mode: CameraFacingMode) => {
+  const selectFacingMode = useCallback(async (
+    mode: CameraFacingMode,
+    orientation: DeviceOrientation = readDeviceOrientation(),
+  ) => {
     if (mode === facingMode && status === "ready") return true;
     if (status === "ready" || status === "requesting" || status === "error") {
-      return start(mode);
+      return start(mode, orientation);
     }
     setFacingMode(mode);
     setError(null);
     return true;
   }, [facingMode, start, status]);
+
+  const reconfigure = useCallback(
+    (orientation: DeviceOrientation) => start(facingMode, orientation),
+    [facingMode, start],
+  );
 
   useEffect(() => releaseStream, [releaseStream]);
 
@@ -92,21 +128,34 @@ export function useCamera(): UseCamera {
     error,
     facingMode,
     isMirrored: facingMode === "user",
+    frameSize,
+    frameAspectRatio: frameSize ? frameSize.width / frameSize.height : null,
     videoRef,
     start,
     selectFacingMode,
+    reconfigure,
     stop,
   };
 }
 
-async function requestCameraStream(mode: CameraFacingMode): Promise<MediaStream> {
+async function requestCameraStream(
+  mode: CameraFacingMode,
+  orientation: DeviceOrientation,
+): Promise<MediaStream> {
   const mediaDevices = navigator.mediaDevices;
-  const dimensions = preferredDimensions();
-  const base = {
-    width: { ideal: dimensions.width },
-    height: { ideal: dimensions.height },
-    aspectRatio: { ideal: dimensions.aspectRatio },
+  const isLandscape = orientation === "landscape";
+  const base: MediaTrackConstraints = {
+    width: { ideal: isLandscape ? 1280 : 960 },
+    height: { ideal: isLandscape ? 960 : 1280 },
+    aspectRatio: { ideal: isLandscape ? 4 / 3 : 3 / 4 },
+    frameRate: { ideal: 30, max: 30 },
   };
+  const supported = mediaDevices.getSupportedConstraints?.() as
+    | (MediaTrackSupportedConstraints & { resizeMode?: boolean })
+    | undefined;
+  if (supported?.resizeMode) {
+    (base as MediaTrackConstraints & { resizeMode?: "none" }).resizeMode = "none";
+  }
 
   try {
     return await mediaDevices.getUserMedia({
@@ -145,12 +194,28 @@ async function findCameraDeviceId(mode: CameraFacingMode): Promise<string | null
   return devices.find((device) => pattern.test(device.label))?.deviceId ?? null;
 }
 
-function preferredDimensions() {
-  const landscape = typeof window !== "undefined"
-    && window.matchMedia?.("(orientation: landscape)").matches;
-  return landscape
-    ? { width: 1280, height: 720, aspectRatio: 16 / 9 }
-    : { width: 720, height: 960, aspectRatio: 3 / 4 };
+function readDeviceOrientation(): DeviceOrientation {
+  if (typeof window === "undefined") return "portrait";
+  return window.innerWidth > window.innerHeight ? "landscape" : "portrait";
+}
+
+function stopStream(stream: MediaStream): void {
+  stream.getTracks().forEach((track) => track.stop());
+}
+
+async function waitForVideoMetadata(video: HTMLVideoElement): Promise<void> {
+  if (video.videoWidth > 0 && video.videoHeight > 0) return;
+  await new Promise<void>((resolve) => {
+    const timeout = window.setTimeout(done, 1_500);
+    function done() {
+      window.clearTimeout(timeout);
+      video.removeEventListener("loadedmetadata", done);
+      video.removeEventListener("resize", done);
+      resolve();
+    }
+    video.addEventListener("loadedmetadata", done, { once: true });
+    video.addEventListener("resize", done, { once: true });
+  });
 }
 
 function isConstraintFallbackError(cause: unknown): boolean {

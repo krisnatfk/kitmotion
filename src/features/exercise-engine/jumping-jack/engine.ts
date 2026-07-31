@@ -75,6 +75,10 @@ export class JumpingJackEngine implements ExerciseEngine {
     this.lastFrameMs = 0;
   }
 
+  interruptTracking(): void {
+    this.abortIncompleteRep();
+  }
+
   processFrame(frame: PoseFrame): ExerciseFrameResult {
     if (this.startMs === 0) this.startMs = frame.timestampMs;
     this.lastFrameMs = frame.timestampMs;

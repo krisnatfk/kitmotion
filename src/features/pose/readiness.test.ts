@@ -117,6 +117,7 @@ function frontPushUpPose(standing: boolean) {
   const landmarks = fullBody(0.1);
   const worldLandmarks = fullBody(0.1);
   const imagePoints: [number, number, number][] = [
+    [POSE_LANDMARKS.NOSE, 0.5, 0.16],
     [POSE_LANDMARKS.LEFT_SHOULDER, 0.42, 0.3],
     [POSE_LANDMARKS.RIGHT_SHOULDER, 0.58, 0.3],
     [POSE_LANDMARKS.LEFT_ELBOW, 0.32, 0.5],

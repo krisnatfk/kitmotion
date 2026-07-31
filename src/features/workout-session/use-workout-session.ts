@@ -5,6 +5,7 @@ import type {
   ExerciseConfig,
   ExerciseFrameResult,
   ExerciseSessionMetrics,
+  PoseCameraMode,
   PoseFrame,
 } from "@/features/exercise-engine/core/types";
 import { createEngine } from "@/features/exercise-engine/registry";
@@ -24,6 +25,7 @@ export interface LiveState {
   feedback: ExerciseFrameResult["feedback"];
   trackingValid: boolean;
   liveMetric?: { label: string; value: number };
+  diagnostics?: ExerciseFrameResult["diagnostics"];
   elapsedMs: number;
 }
 
@@ -59,6 +61,8 @@ export function useWorkoutSession({
   const sensorSummaryRef = useRef<SensorSessionSummary | null>(null);
   const trackingLossCountRef = useRef(0);
   const previousTrackingValidRef = useRef(true);
+  const cameraModeRef = useRef<PoseCameraMode | null>(null);
+  const pausedAtRef = useRef<number | null>(null);
 
   const [live, setLive] = useState<LiveState>({
     status: "idle",
@@ -89,9 +93,11 @@ export function useWorkoutSession({
     };
   }, [live.status]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (cameraMode?: PoseCameraMode) => {
     if (!engine) return;
     engine.reset();
+    cameraModeRef.current = cameraMode ?? null;
+    pausedAtRef.current = null;
     startedAtRef.current = Date.now();
     await sensorProvider.startSession();
     sensorSummaryRef.current = null;
@@ -105,6 +111,7 @@ export function useWorkoutSession({
       invalidReps: 0,
       feedback: [],
       trackingValid: true,
+      diagnostics: cameraMode ? { cameraMode } : undefined,
       elapsedMs: 0,
     });
   }, [engine, sensorProvider]);
@@ -120,7 +127,10 @@ export function useWorkoutSession({
   const processFrame = useCallback(
     (frame: PoseFrame) => {
       if (!engine || live.status !== "active") return;
-      const result = engine.processFrame(frame);
+      const result = engine.processFrame({
+        ...frame,
+        cameraMode: cameraModeRef.current ?? frame.cameraMode,
+      });
       if (previousTrackingValidRef.current && !result.trackingValid) trackingLossCountRef.current += 1;
       previousTrackingValidRef.current = result.trackingValid;
       setLive((s) => ({
@@ -132,10 +142,48 @@ export function useWorkoutSession({
         feedback: result.feedback,
         trackingValid: result.trackingValid,
         liveMetric: result.liveMetric,
+        diagnostics: result.diagnostics,
       }));
     },
     [engine, live.status],
   );
+
+  const pauseForCamera = useCallback(() => {
+    if (!engine || live.status !== "active") return;
+    engine.interruptTracking();
+    pausedAtRef.current = Date.now();
+    setLive((state) => ({
+      ...state,
+      status: "paused",
+      phase: "camera-adjustment",
+      trackingValid: false,
+      feedback: [],
+      diagnostics: {
+        ...state.diagnostics,
+        cameraMode: cameraModeRef.current ?? undefined,
+        trackingMessage: "Kamera sedang menyesuaikan orientasi.",
+      },
+    }));
+  }, [engine, live.status]);
+
+  const resumeAfterCamera = useCallback(() => {
+    if (live.status !== "paused") return;
+    if (pausedAtRef.current !== null && startedAtRef.current > 0) {
+      startedAtRef.current += Date.now() - pausedAtRef.current;
+    }
+    pausedAtRef.current = null;
+    previousTrackingValidRef.current = true;
+    setLive((state) => ({
+      ...state,
+      status: "active",
+      trackingValid: false,
+      diagnostics: {
+        ...state.diagnostics,
+        cameraMode: cameraModeRef.current ?? undefined,
+        trackingMessage: "Tahan posisi awal sampai gerakan terbaca kembali.",
+      },
+    }));
+  }, [live.status]);
 
   const finish = useCallback(async (): Promise<FinalizeSessionInput | null> => {
     if (!engine) return null;
@@ -214,6 +262,8 @@ export function useWorkoutSession({
     sensorSummaryRef.current = null;
     trackingLossCountRef.current = 0;
     previousTrackingValidRef.current = true;
+    cameraModeRef.current = null;
+    pausedAtRef.current = null;
     setLive({
       status: "idle",
       phase: "ready",
@@ -234,7 +284,16 @@ export function useWorkoutSession({
     };
   }, [sensorProvider]);
 
-  return { live, start, setReady, processFrame, finish, reset };
+  return {
+    live,
+    start,
+    setReady,
+    processFrame,
+    finish,
+    pauseForCamera,
+    resumeAfterCamera,
+    reset,
+  };
 }
 
 function roundOrNull(n: number): number | null {

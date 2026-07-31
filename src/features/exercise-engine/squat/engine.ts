@@ -80,6 +80,11 @@ export class SquatEngine implements ExerciseEngine {
     this.trackingLossFrames = 0;
   }
 
+  interruptTracking(): void {
+    this.abortIncompleteRep();
+    this.trackingLossFrames = 0;
+  }
+
   processFrame(frame: PoseFrame): ExerciseFrameResult {
     if (this.startMs === 0) this.startMs = frame.timestampMs;
     this.lastFrameMs = frame.timestampMs;

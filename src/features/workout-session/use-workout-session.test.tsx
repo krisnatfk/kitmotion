@@ -34,4 +34,36 @@ describe("useWorkoutSession", () => {
       elapsedMs: 0,
     });
   });
+
+  it("pauses for camera reconfiguration and resumes without resetting counters", async () => {
+    const { result } = renderHook(() => useWorkoutSession({
+      engineKey: SQUAT_ENGINE_KEY,
+      config: { ...SQUAT_DEFAULT_CONFIG },
+      exerciseSlug: "squat",
+      targetReps: 12,
+      targetSeconds: null,
+      milestoneLevel: null,
+    }));
+
+    await act(async () => {
+      await result.current.start("front");
+    });
+    act(() => {
+      result.current.pauseForCamera();
+    });
+    expect(result.current.live).toMatchObject({
+      status: "paused",
+      repCount: 0,
+      validReps: 0,
+    });
+
+    act(() => {
+      result.current.resumeAfterCamera();
+    });
+    expect(result.current.live).toMatchObject({
+      status: "active",
+      repCount: 0,
+      validReps: 0,
+    });
+  });
 });

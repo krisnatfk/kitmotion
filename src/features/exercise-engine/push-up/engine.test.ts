@@ -181,14 +181,16 @@ function driveOneFrontPushUp(
   let timestamp = startMs;
   const confirm = (left: number, right = left) => {
     for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.debounceFrames + 1; index += 1) {
-      engine.processFrame(frontPushUpFrame(left, timestamp, { rightElbowAngle: right }));
+      const frame = frontPushUpFrame(left, timestamp, { rightElbowAngle: right });
+      frame.cameraMode = "front";
+      engine.processFrame(frame);
       timestamp += 100;
     }
   };
   confirm(170);
   confirm(130);
   confirm(bottomLeftAngle, bottomRightAngle);
-  confirm(120);
+  confirm(130);
   confirm(170);
   return timestamp;
 }
@@ -198,6 +200,7 @@ function driveOneFrontArmOnlyPushUp(engine: PushUpEngine, startMs: number): numb
   const confirm = (angle: number) => {
     for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.debounceFrames + 1; index += 1) {
       const frame = frontPushUpFrame(angle, timestamp);
+      frame.cameraMode = "front";
       frame.worldLandmarks = undefined;
       for (const landmarkIndex of [
         POSE_LANDMARKS.LEFT_HIP,
@@ -219,7 +222,7 @@ function driveOneFrontArmOnlyPushUp(engine: PushUpEngine, startMs: number): numb
   confirm(170);
   confirm(130);
   confirm(80);
-  confirm(120);
+  confirm(130);
   confirm(170);
   return timestamp;
 }
@@ -295,6 +298,17 @@ describe("PushUpEngine", () => {
     expect(result.validReps).toBe(1);
   });
 
+  it("accepts realistic front-view depth when both elbows reach the cam-v6 limit", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    const end = driveOneFrontPushUp(engine, 0, 100, 110);
+    const finalFrame = frontPushUpFrame(155, end);
+    finalFrame.cameraMode = "front";
+    const result = engine.processFrame(finalFrame);
+    expect(result.repCount).toBe(1);
+    expect(result.validReps).toBe(1);
+  });
+
   it("keeps counting from both front arms when the lower body is occluded", () => {
     const engine = new PushUpEngine();
     engine.initialize({});
@@ -313,21 +327,87 @@ describe("PushUpEngine", () => {
     let timestamp = 0;
     for (const angle of [170, 130, 80, 120, 170]) {
       for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.debounceFrames + 1; index += 1) {
-        engine.processFrame(frontPushUpFrame(angle, timestamp, { standing: true }));
+        const frame = frontPushUpFrame(angle, timestamp, { standing: true });
+        frame.cameraMode = "front";
+        engine.processFrame(frame);
         timestamp += 100;
       }
     }
     expect(engine.finalize().totalReps).toBe(0);
   });
 
+  it("does not count a shallow front-facing movement", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    const end = driveOneFrontPushUp(
+      engine,
+      0,
+      PUSH_UP_DEFAULT_CONFIG.frontElbowDownMax + 15,
+    );
+    const frame = frontPushUpFrame(160, end);
+    frame.cameraMode = "front";
+    const result = engine.processFrame(frame);
+    expect(result.repCount).toBe(0);
+    expect(result.validReps).toBe(0);
+  });
+
   it("marks a front-facing repetition invalid when the elbows are asymmetric", () => {
     const engine = new PushUpEngine();
     engine.initialize({});
-    driveOneFrontPushUp(engine, 0, 70, 100);
+    driveOneFrontPushUp(engine, 0, 70, 110);
     const metrics = engine.finalize();
     expect(metrics.totalReps).toBe(1);
     expect(metrics.invalidReps).toBe(1);
     expect(metrics.repetitions[0]?.metrics.issueCodes).toContain("elbows-asymmetric");
+  });
+
+  it("keeps an in-progress front rep through a brief arm-landmark loss", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    let timestamp = 0;
+    const confirm = (angle: number) => {
+      for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.debounceFrames + 1; index += 1) {
+        const frame = frontPushUpFrame(angle, timestamp);
+        frame.cameraMode = "front";
+        engine.processFrame(frame);
+        timestamp += 100;
+      }
+    };
+    confirm(160);
+    confirm(130);
+    for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.trackingGraceFrames - 2; index += 1) {
+      const frame = frontPushUpFrame(100, timestamp);
+      frame.cameraMode = "front";
+      frame.landmarks[POSE_LANDMARKS.LEFT_WRIST]!.visibility = 0;
+      engine.processFrame(frame);
+      timestamp += 100;
+    }
+    confirm(100);
+    confirm(125);
+    confirm(155);
+    expect(engine.finalize().validReps).toBe(1);
+  });
+
+  it("discards only an incomplete front rep after sustained arm-landmark loss", () => {
+    const engine = new PushUpEngine();
+    engine.initialize({});
+    let timestamp = 0;
+    for (const angle of [160, 130]) {
+      for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.debounceFrames + 1; index += 1) {
+        const frame = frontPushUpFrame(angle, timestamp);
+        frame.cameraMode = "front";
+        engine.processFrame(frame);
+        timestamp += 100;
+      }
+    }
+    for (let index = 0; index < PUSH_UP_DEFAULT_CONFIG.trackingGraceFrames; index += 1) {
+      const frame = frontPushUpFrame(100, timestamp);
+      frame.cameraMode = "front";
+      frame.landmarks[POSE_LANDMARKS.LEFT_WRIST]!.visibility = 0;
+      engine.processFrame(frame);
+      timestamp += 100;
+    }
+    expect(engine.finalize().totalReps).toBe(0);
   });
 
   it("does not arm a side-facing knee push-up", () => {

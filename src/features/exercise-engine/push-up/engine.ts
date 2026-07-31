@@ -5,6 +5,7 @@ import type {
   ExerciseSessionMetrics,
   FrameFeedback,
   NormalizedLandmark,
+  PoseCameraMode,
   PoseFrame,
   RepRecord,
   FeedbackSummary,
@@ -29,10 +30,16 @@ interface PushUpRep {
   maxHipAbsDeviation: number;
   minBodyHorizontalMargin: number;
   maxElbowAsymmetry: number;
+  minWorstElbowAngle: number;
   keptLegsStraight: boolean;
   reachedDown: boolean;
   issueCodes: Set<string>;
   valid: boolean;
+  cameraMode: PoseCameraMode;
+  elbowDownMax: number;
+  elbowIndividualDownMax: number;
+  elbowUpMin: number;
+  elbowSymmetryMaxDelta: number;
 }
 
 interface PushUpKinematics {
@@ -43,7 +50,26 @@ interface PushUpKinematics {
   bodyHorizontalRatio: number;
   requiredHorizontalRatio: number;
   legStraight: boolean;
+  cameraMode: PoseCameraMode;
+  leftElbowAngle: number;
+  rightElbowAngle: number;
+  elbowDownMax: number;
+  elbowIndividualDownMax: number;
+  elbowUpMin: number;
+  elbowSymmetryMaxDelta: number;
+  trackingMessage?: string;
 }
+
+type PushUpTransitionContext = Pick<
+  PushUpKinematics,
+  | "cameraMode"
+  | "leftElbowAngle"
+  | "rightElbowAngle"
+  | "elbowDownMax"
+  | "elbowIndividualDownMax"
+  | "elbowUpMin"
+  | "elbowSymmetryMaxDelta"
+>;
 
 /**
  * Push-up repetition counter.
@@ -65,6 +91,7 @@ export class PushUpEngine implements ExerciseEngine {
   private startMs = 0;
   private lastFrameMs = 0;
   private orientationLossFrames = 0;
+  private trackingLossFrames = 0;
 
   initialize(config: ExerciseConfig): void {
     this.config = parsePushUpConfig(config);
@@ -84,6 +111,12 @@ export class PushUpEngine implements ExerciseEngine {
     this.startMs = 0;
     this.lastFrameMs = 0;
     this.orientationLossFrames = 0;
+    this.trackingLossFrames = 0;
+  }
+
+  interruptTracking(): void {
+    this.abortIncompleteRep();
+    this.trackingLossFrames = 0;
   }
 
   processFrame(frame: PoseFrame): ExerciseFrameResult {
@@ -98,31 +131,81 @@ export class PushUpEngine implements ExerciseEngine {
       bodyHorizontalRatio,
       requiredHorizontalRatio,
       legStraight,
+      cameraMode,
+      leftElbowAngle,
+      rightElbowAngle,
+      elbowDownMax,
+      elbowIndividualDownMax,
+      elbowUpMin,
+      elbowSymmetryMaxDelta,
+      trackingMessage,
     } = this.readKinematics(frame);
 
     if (!trackingValid) {
-      this.abortIncompleteRep();
-      return this.result([], false, elbowAngle);
+      this.trackingLossFrames += 1;
+      if (this.trackingLossFrames >= this.config.trackingGraceFrames) {
+        this.abortIncompleteRep();
+      }
+      return this.result([], false, elbowAngle, {
+        cameraMode,
+        leftElbowAngle,
+        rightElbowAngle,
+        trackingMessage: trackingMessage ?? "Kedua bahu, siku, dan tangan belum terbaca stabil.",
+      });
     }
+    this.trackingLossFrames = 0;
 
     const bodyHorizontal = bodyHorizontalRatio >= requiredHorizontalRatio;
     const plankReady = bodyHorizontal
       && legStraight
       && hipDeviation >= -this.config.hipSagMaxDrop
       && hipDeviation <= this.config.hipRiseMaxRise
-      && elbowAngle >= this.config.elbowUpMin - 5;
+      && elbowAngle >= elbowUpMin - 5;
     const feedback: FrameFeedback[] = [];
-    this.evaluateIssues(elbowAngle, hipDeviation, elbowAsymmetry, bodyHorizontal, legStraight, feedback);
+    this.evaluateIssues(
+      elbowAngle,
+      hipDeviation,
+      elbowAsymmetry,
+      elbowSymmetryMaxDelta,
+      elbowDownMax,
+      bodyHorizontal,
+      legStraight,
+      feedback,
+    );
 
     if (this.phase === PushUpPhase.SETUP) {
-      this.advance(elbowAngle, plankReady, frame.timestampMs);
-      return this.result(feedback, true, elbowAngle);
+      this.advance(elbowAngle, plankReady, frame.timestampMs, {
+        cameraMode,
+        leftElbowAngle,
+        rightElbowAngle,
+        elbowDownMax,
+        elbowIndividualDownMax,
+        elbowUpMin,
+        elbowSymmetryMaxDelta,
+      });
+      return this.result(feedback, true, elbowAngle, {
+        cameraMode,
+        leftElbowAngle,
+        rightElbowAngle,
+        trackingMessage: plankReady
+          ? undefined
+          : "Kunci posisi plank atas dengan kedua siku lurus.",
+        bodyAligned: bodyHorizontal && legStraight,
+      });
     }
 
     if (!bodyHorizontal || !legStraight) {
       this.orientationLossFrames += 1;
       if (this.orientationLossFrames >= this.config.debounceFrames) this.abortIncompleteRep();
-      return this.result(feedback, true, elbowAngle);
+      return this.result(feedback, true, elbowAngle, {
+        cameraMode,
+        leftElbowAngle,
+        rightElbowAngle,
+        trackingMessage: cameraMode === "side"
+          ? "Luruskan lutut dan garis tubuh dari bahu sampai kaki."
+          : "Kembali ke posisi plank. Gerakan lengan saat berdiri tidak dihitung.",
+        bodyAligned: false,
+      });
     }
     this.orientationLossFrames = 0;
 
@@ -132,6 +215,10 @@ export class PushUpEngine implements ExerciseEngine {
       this.currentRep.maxHipRise = Math.max(this.currentRep.maxHipRise, Math.max(0, hipDeviation));
       this.currentRep.maxHipAbsDeviation = Math.max(this.currentRep.maxHipAbsDeviation, Math.abs(hipDeviation));
       this.currentRep.maxElbowAsymmetry = Math.max(this.currentRep.maxElbowAsymmetry, elbowAsymmetry);
+      this.currentRep.minWorstElbowAngle = Math.min(
+        this.currentRep.minWorstElbowAngle,
+        Math.max(leftElbowAngle, rightElbowAngle),
+      );
       this.currentRep.minBodyHorizontalMargin = Math.min(
         this.currentRep.minBodyHorizontalMargin,
         bodyHorizontalRatio - requiredHorizontalRatio,
@@ -140,10 +227,23 @@ export class PushUpEngine implements ExerciseEngine {
     }
 
     const repetitionsBefore = this.repetitions.length;
-    this.advance(elbowAngle, plankReady, frame.timestampMs);
+    this.advance(elbowAngle, plankReady, frame.timestampMs, {
+      cameraMode,
+      leftElbowAngle,
+      rightElbowAngle,
+      elbowDownMax,
+      elbowIndividualDownMax,
+      elbowUpMin,
+      elbowSymmetryMaxDelta,
+    });
     appendCompletedRepFeedback(this.repetitions, repetitionsBefore, feedback, PUSH_UP_FEEDBACK);
 
-    return this.result(feedback, true, elbowAngle);
+    return this.result(feedback, true, elbowAngle, {
+      cameraMode,
+      leftElbowAngle,
+      rightElbowAngle,
+      bodyAligned: bodyHorizontal && legStraight,
+    });
   }
 
   finalize(): ExerciseSessionMetrics {
@@ -217,28 +317,50 @@ export class PushUpEngine implements ExerciseEngine {
     ].filter((value): value is PushUpKinematics => value !== null);
     const bestSide = sideOptions.sort((a, b) => b.bodyHorizontalRatio - a.bodyHorizontalRatio)[0];
 
-    const frontArmGeometry = readFrontArmGeometry(landmarks, cfg.minConfidence);
-    if (frontArmGeometry?.trackingValid) {
-      return frontArmKinematics(landmarks, cfg)!;
+    const front = frontArmKinematics(landmarks, frame.worldLandmarks, cfg);
+    if (frame.cameraMode === "front") {
+      return front ?? invalidKinematics(
+        0,
+        "front",
+        "Kedua bahu, siku, dan tangan harus terlihat bersamaan.",
+        cfg,
+      );
     }
 
-    if (bestSide && bestSide.bodyHorizontalRatio >= cfg.bodyHorizontalMinRatio) {
-      if (leftOk && rightOk) {
-        const leftAngle = angleBetweenDegrees(lShoulder!, lElbow!, lWrist!);
-        const rightAngle = angleBetweenDegrees(rShoulder!, rElbow!, rWrist!);
-        bestSide.elbowAngle = (leftAngle + rightAngle) / 2;
-        bestSide.elbowAsymmetry = Math.abs(leftAngle - rightAngle);
-      }
-      return bestSide;
+    if (bestSide && leftOk && rightOk) {
+      const leftAngle = angleBetweenDegrees(lShoulder!, lElbow!, lWrist!);
+      const rightAngle = angleBetweenDegrees(rShoulder!, rElbow!, rWrist!);
+      bestSide.elbowAngle = (leftAngle + rightAngle) / 2;
+      bestSide.leftElbowAngle = leftAngle;
+      bestSide.rightElbowAngle = rightAngle;
+      bestSide.elbowAsymmetry = Math.abs(leftAngle - rightAngle);
     }
 
-    return bestSide ?? invalidKinematics(cfg.bodyHorizontalMinRatio);
+    if (frame.cameraMode === "side") {
+      return bestSide ?? invalidKinematics(
+        cfg.bodyHorizontalMinRatio,
+        "side",
+        "Bahu, siku, tangan, pinggul, lutut, dan kaki pada satu sisi harus terlihat.",
+        cfg,
+      );
+    }
+
+    if (front?.trackingValid) return front;
+    if (bestSide && bestSide.bodyHorizontalRatio >= cfg.bodyHorizontalMinRatio) return bestSide;
+    return bestSide ?? invalidKinematics(
+      cfg.bodyHorizontalMinRatio,
+      "side",
+      "Tubuh belum terbaca lengkap.",
+      cfg,
+    );
   }
 
   private evaluateIssues(
     elbowAngle: number,
     hipDeviation: number,
     elbowAsymmetry: number,
+    elbowSymmetryMaxDelta: number,
+    elbowDownMax: number,
     bodyHorizontal: boolean,
     legStraight: boolean,
     feedback: FrameFeedback[],
@@ -251,8 +373,8 @@ export class PushUpEngine implements ExerciseEngine {
     if (!legStraight) push(codes, feedback, "knees-bent", PUSH_UP_FEEDBACK);
     if (hipDeviation < -cfg.hipSagMaxDrop) push(codes, feedback, "hips-too-low", PUSH_UP_FEEDBACK);
     if (hipDeviation > cfg.hipRiseMaxRise) push(codes, feedback, "hips-too-high", PUSH_UP_FEEDBACK);
-    if (elbowAsymmetry > cfg.elbowSymmetryMaxDelta) push(codes, feedback, "elbows-asymmetric", PUSH_UP_FEEDBACK);
-    if (this.phase === PushUpPhase.DOWN && elbowAngle > cfg.elbowDownMax + 15) {
+    if (elbowAsymmetry > elbowSymmetryMaxDelta) push(codes, feedback, "elbows-asymmetric", PUSH_UP_FEEDBACK);
+    if (this.phase === PushUpPhase.DOWN && elbowAngle > elbowDownMax + 15) {
       push(codes, feedback, "elbows-not-bent", PUSH_UP_FEEDBACK);
     }
     if (Math.abs(hipDeviation) > cfg.hipSagMaxDrop * 1.5) {
@@ -268,9 +390,19 @@ export class PushUpEngine implements ExerciseEngine {
     }
   }
 
-  private advance(elbowAngle: number, plankReady: boolean, ts: number): void {
-    const cfg = this.config;
-    const target = this.nextPhase(elbowAngle, plankReady);
+  private advance(
+    elbowAngle: number,
+    plankReady: boolean,
+    ts: number,
+    context: PushUpTransitionContext,
+  ): void {
+    const target = this.nextPhase(
+      elbowAngle,
+      plankReady,
+      context.elbowDownMax,
+      context.elbowUpMin,
+      context.cameraMode,
+    );
     if (target === this.phase) {
       this.pendingPhase = null;
       this.pendingCount = 0;
@@ -282,28 +414,34 @@ export class PushUpEngine implements ExerciseEngine {
       return;
     }
     this.pendingCount += 1;
-    if (this.pendingCount < cfg.debounceFrames) return;
+    if (this.pendingCount < this.config.debounceFrames) return;
 
-    this.commitTransition(this.pendingPhase, elbowAngle, ts);
+    this.commitTransition(this.pendingPhase, elbowAngle, ts, context);
     this.pendingPhase = null;
     this.pendingCount = 0;
   }
 
-  private nextPhase(elbowAngle: number, plankReady: boolean): PushUpPhase {
-    const cfg = this.config;
+  private nextPhase(
+    elbowAngle: number,
+    plankReady: boolean,
+    elbowDownMax: number,
+    elbowUpMin: number,
+    cameraMode: PoseCameraMode,
+  ): PushUpPhase {
+    const downThreshold = elbowDownMax + (cameraMode === "front" ? 0.5 : 0);
     switch (this.phase) {
       case PushUpPhase.SETUP:
         return plankReady ? PushUpPhase.UP : PushUpPhase.SETUP;
       case PushUpPhase.UP:
-        return elbowAngle < cfg.elbowUpMin - 10 ? PushUpPhase.DESCENDING : PushUpPhase.UP;
+        return elbowAngle < elbowUpMin - 10 ? PushUpPhase.DESCENDING : PushUpPhase.UP;
       case PushUpPhase.DESCENDING:
-        if (elbowAngle <= cfg.elbowDownMax) return PushUpPhase.DOWN;
+        if (elbowAngle <= downThreshold) return PushUpPhase.DOWN;
         if (this.currentRep && elbowAngle > this.currentRep.minElbowAngle + 20) return PushUpPhase.ASCENDING;
         return PushUpPhase.DESCENDING;
       case PushUpPhase.DOWN:
-        return elbowAngle > cfg.elbowDownMax + 15 ? PushUpPhase.ASCENDING : PushUpPhase.DOWN;
+        return elbowAngle > elbowDownMax + 15 ? PushUpPhase.ASCENDING : PushUpPhase.DOWN;
       case PushUpPhase.ASCENDING:
-        return elbowAngle >= cfg.elbowUpMin - 1 ? PushUpPhase.COMPLETE : PushUpPhase.ASCENDING;
+        return elbowAngle >= elbowUpMin - 1 ? PushUpPhase.COMPLETE : PushUpPhase.ASCENDING;
       case PushUpPhase.COMPLETE:
         return PushUpPhase.UP;
       default:
@@ -311,7 +449,12 @@ export class PushUpEngine implements ExerciseEngine {
     }
   }
 
-  private commitTransition(to: PushUpPhase, elbowAngle: number, ts: number): void {
+  private commitTransition(
+    to: PushUpPhase,
+    elbowAngle: number,
+    ts: number,
+    context: PushUpTransitionContext,
+  ): void {
     const from = this.phase;
     this.phase = to;
 
@@ -325,10 +468,16 @@ export class PushUpEngine implements ExerciseEngine {
         maxHipAbsDeviation: 0,
         minBodyHorizontalMargin: 1,
         maxElbowAsymmetry: 0,
+        minWorstElbowAngle: Math.max(context.leftElbowAngle, context.rightElbowAngle),
         keptLegsStraight: true,
         reachedDown: false,
         issueCodes: new Set<string>(),
         valid: false,
+        cameraMode: context.cameraMode,
+        elbowDownMax: context.elbowDownMax,
+        elbowIndividualDownMax: context.elbowIndividualDownMax,
+        elbowUpMin: context.elbowUpMin,
+        elbowSymmetryMaxDelta: context.elbowSymmetryMaxDelta,
       };
     }
 
@@ -351,8 +500,10 @@ export class PushUpEngine implements ExerciseEngine {
 
     const cfg = this.config;
     const tempoMs = rep.completedAtMs - rep.startedAtMs;
-    const bentEnough = rep.minElbowAngle <= cfg.elbowDownMax + 5;
-    const elbowsAligned = rep.maxElbowAsymmetry <= cfg.elbowSymmetryMaxDelta;
+    const averageDepthTolerance = rep.cameraMode === "front" ? 0.5 : 5;
+    const bentEnough = rep.minElbowAngle <= rep.elbowDownMax + averageDepthTolerance
+      && rep.minWorstElbowAngle <= rep.elbowIndividualDownMax;
+    const elbowsAligned = rep.maxElbowAsymmetry <= rep.elbowSymmetryMaxDelta;
     const hipsAligned = rep.maxHipSag <= cfg.hipSagMaxDrop && rep.maxHipRise <= cfg.hipRiseMaxRise;
     const stayedHorizontal = rep.minBodyHorizontalMargin >= 0;
     rep.valid = bentEnough
@@ -383,7 +534,12 @@ export class PushUpEngine implements ExerciseEngine {
       isValid: rep.valid,
       metrics: {
         formScore: round(scoreFromRange(rep.maxHipAbsDeviation, cfg.hipSagMaxDrop, 0, true)),
-        rangeScore: round(scoreFromRange(rep.minElbowAngle, cfg.elbowDownMax + 35, cfg.elbowDownMax, true)),
+        rangeScore: round(scoreFromRange(
+          rep.minElbowAngle,
+          rep.elbowDownMax + 35,
+          rep.elbowDownMax,
+          true,
+        )),
         tempoMs,
         stabilityScore: round(scoreFromRange(rep.maxHipAbsDeviation, cfg.hipSagMaxDrop, 0, true)),
         issueCodes: [...rep.issueCodes],
@@ -429,7 +585,12 @@ export class PushUpEngine implements ExerciseEngine {
     });
   }
 
-  private result(feedback: FrameFeedback[], trackingValid: boolean, elbowAngle = 180): ExerciseFrameResult {
+  private result(
+    feedback: FrameFeedback[],
+    trackingValid: boolean,
+    elbowAngle = 180,
+    diagnostics?: ExerciseFrameResult["diagnostics"],
+  ): ExerciseFrameResult {
     return {
       phase: this.phase,
       repCount: this.repCount,
@@ -438,6 +599,7 @@ export class PushUpEngine implements ExerciseEngine {
       feedback,
       trackingValid,
       liveMetric: { label: "Sudut siku", value: round(elbowAngle) },
+      diagnostics,
     };
   }
 }
@@ -446,7 +608,12 @@ function visible(lm: NormalizedLandmark | undefined, min: number): boolean {
   return !!lm && lm.visibility >= min;
 }
 
-function invalidKinematics(requiredHorizontalRatio: number): PushUpKinematics {
+function invalidKinematics(
+  requiredHorizontalRatio: number,
+  cameraMode: PoseCameraMode,
+  trackingMessage: string,
+  config: PushUpConfig,
+): PushUpKinematics {
   return {
     trackingValid: false,
     elbowAngle: 180,
@@ -455,6 +622,18 @@ function invalidKinematics(requiredHorizontalRatio: number): PushUpKinematics {
     bodyHorizontalRatio: 0,
     requiredHorizontalRatio,
     legStraight: false,
+    cameraMode,
+    leftElbowAngle: 180,
+    rightElbowAngle: 180,
+    elbowDownMax: cameraMode === "front" ? config.frontElbowDownMax : config.elbowDownMax,
+    elbowIndividualDownMax: cameraMode === "front"
+      ? config.frontElbowIndividualDownMax
+      : config.elbowDownMax + 5,
+    elbowUpMin: cameraMode === "front" ? config.frontElbowUpMin : config.elbowUpMin,
+    elbowSymmetryMaxDelta: cameraMode === "front"
+      ? config.frontElbowSymmetryMaxDelta
+      : config.elbowSymmetryMaxDelta,
+    trackingMessage,
   };
 }
 
@@ -474,34 +653,79 @@ function sideKinematics(
   const projectedX = shoulder.x + t * dx;
   const projectedY = shoulder.y + t * dy;
   const deviation = Math.hypot(hip.x - projectedX, hip.y - projectedY) / bodyLength;
+  const elbowAngle = angleBetweenDegrees(shoulder, elbow, wrist);
   return {
     trackingValid: true,
-    elbowAngle: angleBetweenDegrees(shoulder, elbow, wrist),
+    elbowAngle,
     hipDeviation: hip.y > projectedY ? -deviation : deviation,
     elbowAsymmetry: 0,
     bodyHorizontalRatio: Math.abs(dx) / bodyLength,
     requiredHorizontalRatio: config.bodyHorizontalMinRatio,
     legStraight: angleBetweenDegrees(hip, knee, ankle) >= config.kneeStraightMin,
+    cameraMode: "side",
+    leftElbowAngle: elbowAngle,
+    rightElbowAngle: elbowAngle,
+    elbowDownMax: config.elbowDownMax,
+    elbowIndividualDownMax: config.elbowDownMax + 5,
+    elbowUpMin: config.elbowUpMin,
+    elbowSymmetryMaxDelta: config.elbowSymmetryMaxDelta,
   };
 }
 
 function frontArmKinematics(
   landmarks: NormalizedLandmark[],
+  worldLandmarks: NormalizedLandmark[] | undefined,
   config: PushUpConfig,
 ): PushUpKinematics | null {
   const geometry = readFrontArmGeometry(landmarks, config.minConfidence);
   if (!geometry?.trackingValid) return null;
+  const torsoDepthRatio = readFrontTorsoDepthRatio(worldLandmarks, config.minConfidence);
   return {
     trackingValid: true,
     elbowAngle: geometry.elbowAngle,
     hipDeviation: 0,
     elbowAsymmetry: geometry.elbowAsymmetry,
-    bodyHorizontalRatio: 1,
-    requiredHorizontalRatio: 0,
+    bodyHorizontalRatio: torsoDepthRatio ?? 1,
+    requiredHorizontalRatio: torsoDepthRatio === null ? 0 : 0.55,
     // Legs are occluded in this mode, not known to be bent. Readiness already
     // locked a front plank before the active session entered this fallback.
     legStraight: true,
+    cameraMode: "front",
+    leftElbowAngle: geometry.leftElbowAngle,
+    rightElbowAngle: geometry.rightElbowAngle,
+    elbowDownMax: config.frontElbowDownMax,
+    elbowIndividualDownMax: config.frontElbowIndividualDownMax,
+    elbowUpMin: config.frontElbowUpMin,
+    elbowSymmetryMaxDelta: config.frontElbowSymmetryMaxDelta,
   };
+}
+
+function readFrontTorsoDepthRatio(
+  worldLandmarks: NormalizedLandmark[] | undefined,
+  minConfidence: number,
+): number | null {
+  if (!worldLandmarks) return null;
+  const leftShoulder = worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rightShoulder = worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+  const hips = [
+    worldLandmarks[POSE_LANDMARKS.LEFT_HIP],
+    worldLandmarks[POSE_LANDMARKS.RIGHT_HIP],
+  ].filter((landmark): landmark is NormalizedLandmark => visible(landmark, minConfidence));
+  if (
+    !visible(leftShoulder, minConfidence)
+    || !visible(rightShoulder, minConfidence)
+    || hips.length === 0
+  ) {
+    return null;
+  }
+
+  const shoulderY = (leftShoulder!.y + rightShoulder!.y) / 2;
+  const shoulderZ = (leftShoulder!.z + rightShoulder!.z) / 2;
+  const hipY = avg(hips.map((landmark) => landmark.y));
+  const hipZ = avg(hips.map((landmark) => landmark.z));
+  const verticalSpan = Math.abs(hipY - shoulderY);
+  const depthSpan = Math.abs(hipZ - shoulderZ);
+  return depthSpan / Math.max(Math.hypot(depthSpan, verticalSpan), 0.001);
 }
 
 function push(

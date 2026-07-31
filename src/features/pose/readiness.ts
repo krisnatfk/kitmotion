@@ -178,7 +178,11 @@ function checkSidePushUpReadiness(
   const ankle = landmarks[side.ankle]!;
   const bodyLength = Math.hypot(ankle.x - shoulder.x, ankle.y - shoulder.y);
 
-  if ([shoulder, elbow, wrist, hip, knee, ankle].some(isNearFrameEdge)) {
+  if (
+    [shoulder, elbow, wrist, hip, knee, ankle].some((landmark) =>
+      isNearFrameEdge(landmark),
+    )
+  ) {
     return {
       status: "side-cut",
       message: "Tubuh terpotong di tepi kamera. Gunakan posisi depan, atau putar HP ke landscape jika memilih posisi samping.",
@@ -241,6 +245,14 @@ function checkFrontPushUpReadiness(
 ): ReadinessResult | null {
   const frontArms = readFrontArmGeometry(landmarks, MIN_CONFIDENCE);
   if (!frontArms) return null;
+  if (!visible(POSE_LANDMARKS.NOSE)) {
+    return {
+      status: "side-cut",
+      message: "Kedua lengan terbaca, tetapi kepala keluar frame. Mundur sedikit agar ada ruang saat tubuh turun.",
+      visibleLandmarks: 6,
+      cameraMode: "front",
+    };
+  }
   const hasHip = visible(POSE_LANDMARKS.LEFT_HIP) || visible(POSE_LANDMARKS.RIGHT_HIP);
   if (!hasHip) {
     return {
@@ -260,6 +272,7 @@ function checkFrontPushUpReadiness(
   }
 
   const framingIndices = [
+    POSE_LANDMARKS.NOSE,
     POSE_LANDMARKS.LEFT_SHOULDER,
     POSE_LANDMARKS.RIGHT_SHOULDER,
     POSE_LANDMARKS.LEFT_ELBOW,
@@ -269,6 +282,14 @@ function checkFrontPushUpReadiness(
     POSE_LANDMARKS.LEFT_HIP,
     POSE_LANDMARKS.RIGHT_HIP,
   ].filter(visible);
+  if (framingIndices.some((index) => isNearFrameEdge(landmarks[index]!, 0.07))) {
+    return {
+      status: "too-close",
+      message: "Posisi terlalu dekat dengan tepi frame. Mundur 20-30 cm agar kepala dan tangan tidak terpotong saat bergerak.",
+      visibleLandmarks: framingIndices.length,
+      cameraMode: "front",
+    };
+  }
   const xs = framingIndices.map((index) => landmarks[index]!.x);
   const ys = framingIndices.map((index) => landmarks[index]!.y);
   const poseExtent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
@@ -317,6 +338,9 @@ function pointLineDistanceRatio(
   return Math.abs(dy * point.x - dx * point.y + end.x * start.y - end.y * start.x) / (length * length);
 }
 
-function isNearFrameEdge(landmark: NormalizedLandmark): boolean {
-  return landmark.x < 0.04 || landmark.x > 0.96 || landmark.y < 0.04 || landmark.y > 0.96;
+function isNearFrameEdge(landmark: NormalizedLandmark, margin = 0.04): boolean {
+  return landmark.x < margin
+    || landmark.x > 1 - margin
+    || landmark.y < margin
+    || landmark.y > 1 - margin;
 }
