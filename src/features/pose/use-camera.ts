@@ -150,7 +150,7 @@ function preferredDimensions() {
     && window.matchMedia?.("(orientation: landscape)").matches;
   return landscape
     ? { width: 1280, height: 720, aspectRatio: 16 / 9 }
-    : { width: 720, height: 1280, aspectRatio: 3 / 4 };
+    : { width: 720, height: 960, aspectRatio: 3 / 4 };
 }
 
 function isConstraintFallbackError(cause: unknown): boolean {

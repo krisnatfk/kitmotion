@@ -30,6 +30,29 @@ export function getCoverProjection(
   };
 }
 
+/** Matches CSS object-fit: contain with the default centered object-position. */
+export function getContainProjection(
+  containerWidth: number,
+  containerHeight: number,
+  sourceWidth: number,
+  sourceHeight: number,
+): CoverProjection {
+  const safeSourceWidth = sourceWidth > 0 ? sourceWidth : containerWidth;
+  const safeSourceHeight = sourceHeight > 0 ? sourceHeight : containerHeight;
+  const scale = Math.min(
+    containerWidth / safeSourceWidth,
+    containerHeight / safeSourceHeight,
+  );
+  const renderedWidth = safeSourceWidth * scale;
+  const renderedHeight = safeSourceHeight * scale;
+  return {
+    renderedWidth,
+    renderedHeight,
+    cropX: (containerWidth - renderedWidth) / 2,
+    cropY: (containerHeight - renderedHeight) / 2,
+  };
+}
+
 export function projectLandmark(
   landmark: Pick<NormalizedLandmark, "x" | "y">,
   projection: CoverProjection,

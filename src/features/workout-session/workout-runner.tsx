@@ -232,6 +232,22 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
     }
   }, [camera, pendingPayload, session]);
 
+  const repeatWorkout = useCallback(async () => {
+    cancelStartCue();
+    setStartCountdown(null);
+    setPendingPayload(null);
+    setResult(null);
+    setError(null);
+    setLandmarks(null);
+    latestReady.current = false;
+    setReadiness({
+      status: "no-body",
+      message: "Kamera sedang disiapkan. Ambil kembali posisi awal latihan.",
+    });
+    session.reset();
+    await camera.start();
+  }, [camera, session]);
+
   useEffect(
     () => () => {
       cancelStartCue();
@@ -254,7 +270,14 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
       {result.challengesCompleted.length > 0 && <ResultList title="Challenge selesai" items={result.challengesCompleted.map((challenge) => ({ key: challenge.code, label: `🎯 ${challenge.title}` }))} />}
       {result.milestone && <div className={`mt-lg rounded-sm p-lg text-sm ${result.milestone.success ? "bg-[#eaf7ee] text-success" : "bg-[#fff7df] text-charcoal"}`}><strong>{result.milestone.success ? "Milestone berhasil" : "Milestone belum berhasil"}</strong><p className="mt-xs">{result.milestone.message}</p></div>}
       {result.aiCoach && <SessionCoachPanel insight={result.aiCoach} />}
-      <div className="mt-section flex flex-wrap gap-md"><Button onClick={() => router.push("/history")}>Lihat riwayat</Button><Button variant="secondary" onClick={() => router.push("/exercises")}>Latihan lain</Button></div>
+      <div className="mt-section flex flex-wrap gap-md">
+        <Button onClick={repeatWorkout} className="bg-sport-lime text-sport-black hover:bg-sport-black hover:text-white">
+          <Icon name="history" className="h-5 w-5" />
+          Ulangi latihan
+        </Button>
+        <Button variant="secondary" onClick={() => router.push("/history")}>Lihat riwayat</Button>
+        <Button variant="secondary" onClick={() => router.push("/exercises")}>Latihan lain</Button>
+      </div>
     </Container>;
   }
 
@@ -283,7 +306,7 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
             ref={camera.videoRef}
             playsInline
             muted
-            className={`h-full w-full object-cover ${
+            className={`h-full w-full object-contain ${
               camera.isMirrored ? "[transform:scaleX(-1)]" : ""
             }`}
           />
@@ -291,6 +314,7 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
             landmarks={landmarks}
             videoRef={camera.videoRef}
             mirror={camera.isMirrored}
+            fit="contain"
             issueCodes={session.live.status === "active" ? session.live.feedback.map((item) => item.code) : []}
           />
           <div className="pointer-events-none absolute left-md top-md rounded-full bg-black/65 px-md py-sm text-[10px] font-bold uppercase tracking-widest text-white backdrop-blur"><span className="mr-sm inline-block h-2 w-2 rounded-full bg-sport-lime" />Live pose</div>

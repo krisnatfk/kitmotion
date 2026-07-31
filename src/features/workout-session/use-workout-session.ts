@@ -203,6 +203,29 @@ export function useWorkoutSession({
     };
   }, [engine, sensorProvider, live.status, live.elapsedMs, exerciseSlug, targetReps, targetSeconds, milestoneLevel]);
 
+  const reset = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    engine?.reset();
+    void sensorProvider.stopSession().catch(() => undefined);
+    startedAtRef.current = 0;
+    sensorSummaryRef.current = null;
+    trackingLossCountRef.current = 0;
+    previousTrackingValidRef.current = true;
+    setLive({
+      status: "idle",
+      phase: "ready",
+      repCount: 0,
+      validReps: 0,
+      invalidReps: 0,
+      feedback: [],
+      trackingValid: false,
+      elapsedMs: 0,
+    });
+  }, [engine, sensorProvider]);
+
   // Cleanup sensor on unmount.
   useEffect(() => {
     return () => {
@@ -211,7 +234,7 @@ export function useWorkoutSession({
     };
   }, [sensorProvider]);
 
-  return { live, start, setReady, processFrame, finish };
+  return { live, start, setReady, processFrame, finish, reset };
 }
 
 function roundOrNull(n: number): number | null {

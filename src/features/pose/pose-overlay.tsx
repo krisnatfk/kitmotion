@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import type { NormalizedLandmark } from "@/features/exercise-engine/core/types";
 import { POSE_LANDMARKS as P } from "@/features/exercise-engine/core/landmarks";
-import { getCoverProjection, projectLandmark } from "./projection";
+import { getContainProjection, getCoverProjection, projectLandmark } from "./projection";
 
 const CONNECTIONS: ReadonlyArray<readonly [number, number]> = [
   [P.LEFT_EAR, P.LEFT_EYE_OUTER], [P.LEFT_EYE_OUTER, P.LEFT_EYE],
@@ -43,19 +43,21 @@ const ISSUE_LANDMARKS: Record<string, number[]> = {
 };
 
 /**
- * Draws landmarks in the exact pixels occupied by an object-cover video.
+ * Draws landmarks in the exact pixels occupied by the fitted video.
  * MediaPipe coordinates describe the uncropped camera frame, so the overlay
- * must apply the same scale/crop offset as CSS object-fit before mirroring.
+ * must apply the same scale and offset as CSS object-fit before mirroring.
  */
 export function PoseOverlay({
   landmarks,
   videoRef,
   mirror = true,
+  fit = "cover",
   issueCodes = [],
 }: {
   landmarks: NormalizedLandmark[] | null;
   videoRef: RefObject<HTMLVideoElement | null>;
   mirror?: boolean;
+  fit?: "cover" | "contain";
   issueCodes?: string[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -84,7 +86,9 @@ export function PoseOverlay({
 
     const sourceWidth = video?.videoWidth || width;
     const sourceHeight = video?.videoHeight || height;
-    const projection = getCoverProjection(width, height, sourceWidth, sourceHeight);
+    const projection = fit === "contain"
+      ? getContainProjection(width, height, sourceWidth, sourceHeight)
+      : getCoverProjection(width, height, sourceWidth, sourceHeight);
     const problemLandmarks = new Set(
       issueCodes.flatMap((code) => ISSUE_LANDMARKS[code] ?? []),
     );
@@ -124,7 +128,7 @@ export function PoseOverlay({
       ctx.strokeStyle = "rgba(10,11,10,0.8)";
       ctx.stroke();
     });
-  }, [issueCodes, landmarks, mirror, videoRef]);
+  }, [fit, issueCodes, landmarks, mirror, videoRef]);
 
   useEffect(() => {
     drawRef.current = draw;
