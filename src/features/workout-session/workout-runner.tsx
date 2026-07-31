@@ -6,7 +6,16 @@ import { useRouter } from "next/navigation";
 import { Container } from "@/components/ui/container";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
-import { PoseOverlay, checkReadiness, getPoseLandmarker, releasePoseLandmarker, useCamera, usePoseDetection } from "@/features/pose";
+import {
+  PoseOverlay,
+  checkReadiness,
+  getPoseLandmarker,
+  releasePoseLandmarker,
+  useCamera,
+  useDeviceOrientation,
+  usePoseDetection,
+  type CameraFacingMode,
+} from "@/features/pose";
 import type { ExerciseConfig, NormalizedLandmark, PoseFrame } from "@/features/exercise-engine/core/types";
 import { useWorkoutSession } from "./use-workout-session";
 import { finalizeSession, type FinalizeResult } from "./actions";
@@ -37,6 +46,7 @@ const MANUAL_TIMER_SECONDS = 10;
 export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engineKey, config, scoringVersion, targetReps, targetSeconds, milestoneLevel }: WorkoutRunnerProps) {
   const router = useRouter();
   const camera = useCamera();
+  const orientation = useDeviceOrientation();
   const [landmarker, setLandmarker] = useState<unknown>(null);
   const [loadingModel, setLoadingModel] = useState(false);
   const [landmarks, setLandmarks] = useState<NormalizedLandmark[] | null>(null);
@@ -49,6 +59,7 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
   const finalizingRef = useRef(false);
   const latestReady = useRef(false);
   const startSessionRef = useRef<() => Promise<void>>(async () => {});
+  const previousOrientationRef = useRef(orientation);
 
   const session = useWorkoutSession({ engineKey, config, exerciseSlug, targetReps, targetSeconds, milestoneLevel });
 
@@ -66,14 +77,32 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
     setError(null);
     setLoadingModel(true);
     try {
-      const [model] = await Promise.all([getPoseLandmarker(), camera.start()]);
+      const [model, cameraStarted] = await Promise.all([
+        getPoseLandmarker(),
+        camera.start(),
+      ]);
       setLandmarker(model);
+      if (!cameraStarted) latestReady.current = false;
     } catch {
       setError("Gagal memuat model pose. Periksa koneksi internet lalu coba lagi.");
     } finally {
       setLoadingModel(false);
     }
   }, [camera]);
+
+  const selectCamera = useCallback(async (mode: CameraFacingMode) => {
+    if (session.live.status !== "idle" || camera.status === "requesting") return;
+    cancelStartCue();
+    setStartCountdown(null);
+    latestReady.current = false;
+    setLandmarks(null);
+    setReadiness({
+      status: "no-body",
+      message: "Kamera berubah. Ambil kembali posisi awal latihan.",
+    });
+    setError(null);
+    await camera.selectFacingMode(mode);
+  }, [camera, session.live.status]);
 
   const startSession = useCallback(async () => {
     setError(null);
@@ -90,6 +119,20 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
 
   const phase = session.live.status;
   const startAvailable = camera.status === "ready" && !!landmarker && phase === "idle";
+
+  useEffect(() => {
+    if (previousOrientationRef.current === orientation) return;
+    previousOrientationRef.current = orientation;
+    if (phase !== "idle") return;
+    cancelStartCue();
+    setStartCountdown(null);
+    latestReady.current = false;
+    setLandmarks(null);
+    setReadiness({
+      status: "no-body",
+      message: "Orientasi berubah. Tahan posisi sampai tubuh terbaca kembali.",
+    });
+  }, [orientation, phase]);
 
   // Start hands-free only after the ready pose remains stable.
   useEffect(() => {
@@ -217,20 +260,41 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
 
   const phaseLabel: Record<string, string> = { idle: "Persiapan", active: "Sedang latihan", finished: "Selesai" };
   const preparationMessage = getPreparationMessage(startCountdown, readiness.message);
+  const cameraGuidance = getCameraGuidance(exerciseSlug, camera.facingMode, orientation);
 
   return <Container className="py-xl tablet-narrow:py-section">
     <header className="flex items-center justify-between gap-lg"><div><Link href={`/exercises/${exerciseSlug}`} className="inline-flex items-center gap-xs text-xs text-mute hover:text-ink"><Icon name="arrow" className="h-3.5 w-3.5 rotate-180" /> Kembali ke panduan</Link><h1 className="mt-sm font-display text-4xl uppercase tablet-narrow:text-5xl">{exerciseName}</h1></div><span className="chip"><span className={`h-2 w-2 rounded-full ${phase === "active" ? "animate-pulse bg-sport-lime-deep" : "bg-stone"}`} />{phaseLabel[phase] ?? phase}</span></header>
     <div className="mt-xl grid gap-lg desktop-small:grid-cols-[minmax(0,1fr)_360px]">
       <div>
-        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-sm bg-sport-black tablet-narrow:aspect-video">
-          <video ref={camera.videoRef} playsInline muted className="h-full w-full object-cover [transform:scaleX(-1)]" />
+        {phase === "idle" && (
+          <CameraSetupToolbar
+            facingMode={camera.facingMode}
+            orientation={orientation}
+            busy={camera.status === "requesting"}
+            onSelect={selectCamera}
+          />
+        )}
+        <div className={`relative w-full overflow-hidden rounded-sm bg-sport-black ${
+          orientation === "landscape"
+            ? "aspect-video"
+            : "aspect-[3/4] tablet-narrow:aspect-video"
+        }`}>
+          <video
+            ref={camera.videoRef}
+            playsInline
+            muted
+            className={`h-full w-full object-cover ${
+              camera.isMirrored ? "[transform:scaleX(-1)]" : ""
+            }`}
+          />
           <PoseOverlay
             landmarks={landmarks}
             videoRef={camera.videoRef}
+            mirror={camera.isMirrored}
             issueCodes={session.live.status === "active" ? session.live.feedback.map((item) => item.code) : []}
           />
           <div className="pointer-events-none absolute left-md top-md rounded-full bg-black/65 px-md py-sm text-[10px] font-bold uppercase tracking-widest text-white backdrop-blur"><span className="mr-sm inline-block h-2 w-2 rounded-full bg-sport-lime" />Live pose</div>
-          {camera.status !== "ready" && <div className="absolute inset-0 flex flex-col items-center justify-center bg-sport-black/90 p-xl text-center text-white"><span className="grid h-16 w-16 place-items-center rounded-full bg-white/10"><Icon name="camera" className="h-7 w-7 text-sport-lime" /></span><h2 className="mt-lg font-display text-3xl uppercase">Kamera belum aktif</h2><p className="mt-sm max-w-md text-sm leading-relaxed text-white/55">Kamera diperlukan untuk membaca gerakan. Video diproses langsung di perangkat dan tidak pernah disimpan.</p><Button onClick={enableCamera} disabled={loadingModel} className="mt-lg bg-sport-lime text-sport-black hover:bg-white">{loadingModel ? "Memuat model…" : "Aktifkan kamera"}</Button>{camera.status === "denied" && <p className="mt-md text-caption-sm text-sale">{camera.error}</p>}</div>}
+          {camera.status !== "ready" && <div className="absolute inset-0 flex flex-col items-center justify-center bg-sport-black/90 p-xl text-center text-white"><span className="grid h-16 w-16 place-items-center rounded-full bg-white/10"><Icon name="camera" className="h-7 w-7 text-sport-lime" /></span><h2 className="mt-lg font-display text-3xl uppercase">Kamera belum aktif</h2><p className="mt-sm max-w-md text-sm leading-relaxed text-white/55">Kamera diperlukan untuk membaca gerakan. Video diproses langsung di perangkat dan tidak pernah disimpan.</p><Button onClick={enableCamera} disabled={loadingModel || camera.status === "requesting"} className="mt-lg bg-sport-lime text-sport-black hover:bg-white">{loadingModel || camera.status === "requesting" ? "Memuat kamera…" : `Aktifkan kamera ${camera.facingMode === "user" ? "depan" : "belakang"}`}</Button>{camera.error && <p className="mt-md max-w-sm text-caption-sm text-[#ff9c9c]">{camera.error}</p>}</div>}
           {startCountdown && phase === "idle" && camera.status === "ready" && (
             <div className="pointer-events-none absolute inset-0 grid place-items-center bg-sport-black/35 text-center text-white backdrop-blur-[2px]">
               <div>
@@ -249,7 +313,13 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
             </div>
           )}
         </div>
-        <p className="mt-md flex items-start gap-sm text-xs leading-relaxed text-mute"><Icon name="camera" className="mt-0.5 h-4 w-4 shrink-0" />{cameraPosition}</p>
+        <div className="mt-md flex items-start gap-sm text-xs leading-relaxed text-mute">
+          <Icon name="camera" className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold text-ink">{cameraGuidance}</p>
+            <p className="mt-xs">{cameraPosition}</p>
+          </div>
+        </div>
       </div>
       <aside className="h-fit rounded-sm bg-sport-black p-xl text-white desktop-small:sticky desktop-small:top-28">
         {phase === "finished" && pendingPayload ? <>
@@ -263,7 +333,7 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
           <p className="text-xs font-bold uppercase tracking-widest text-white/40">Status kesiapan</p>
           <div className="mt-lg flex items-start gap-md"><span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${readiness.status === "ready" ? "bg-sport-lime" : "bg-white/25"}`} /><p className="text-sm leading-relaxed text-white/70" role="status" aria-live="polite">{preparationMessage}</p></div>
           <div className="mt-xl space-y-md border-y border-white/10 py-lg">
-            <p className="flex items-center gap-sm text-xs text-white/60"><Icon name={readiness.status === "ready" ? "check" : "target"} className={`h-4 w-4 ${readiness.status === "ready" ? "text-sport-lime" : "text-white/35"}`} />Tubuh dan kaki terbaca kamera</p>
+            <p className="flex items-center gap-sm text-xs text-white/60"><Icon name={readiness.status === "ready" ? "check" : "target"} className={`h-4 w-4 ${readiness.status === "ready" ? "text-sport-lime" : "text-white/35"}`} />{exerciseSlug === "push-up" && camera.facingMode === "user" ? "Kedua lengan dan pinggul terbaca" : "Tubuh dan kaki terbaca kamera"}</p>
             <p className="flex items-center gap-sm text-xs text-white/50"><Icon name="check" className="h-4 w-4 text-sport-lime" />Mulai otomatis setelah posisi stabil</p>
             <p className="flex items-center gap-sm text-xs text-white/50"><Icon name="check" className="h-4 w-4 text-sport-lime" />Pastikan area gerak aman</p>
           </div>
@@ -327,6 +397,79 @@ function cancelStartCue(): void {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
+}
+
+function CameraSetupToolbar({
+  facingMode,
+  orientation,
+  busy,
+  onSelect,
+}: {
+  facingMode: CameraFacingMode;
+  orientation: "portrait" | "landscape";
+  busy: boolean;
+  onSelect: (mode: CameraFacingMode) => void;
+}) {
+  return (
+    <div className="mb-sm flex flex-wrap items-center justify-between gap-sm">
+      <div className="flex items-center gap-sm">
+        <Icon name="camera" className="h-4 w-4 text-mute" />
+        <div
+          className="inline-flex rounded-full bg-soft-cloud p-1"
+          role="group"
+          aria-label="Pilih kamera"
+        >
+          {([
+            ["user", "Depan"],
+            ["environment", "Belakang"],
+          ] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={facingMode === mode}
+              disabled={busy}
+              onClick={() => onSelect(mode)}
+              className={`min-h-9 min-w-[86px] rounded-full px-md text-xs font-semibold transition-colors disabled:opacity-50 ${
+                facingMode === mode
+                  ? "bg-sport-black text-white"
+                  : "text-mute hover:text-ink"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <span className="inline-flex min-h-9 items-center rounded-full border border-hairline-soft px-md text-[10px] font-bold uppercase tracking-wider text-mute">
+        {orientation === "landscape" ? "Landscape" : "Portrait"}
+      </span>
+    </div>
+  );
+}
+
+function getCameraGuidance(
+  exerciseSlug: string,
+  facingMode: CameraFacingMode,
+  orientation: "portrait" | "landscape",
+): string {
+  if (exerciseSlug === "push-up") {
+    if (facingMode === "environment" && orientation === "portrait") {
+      return "Putar HP ke landscape agar kamera belakang menangkap tubuh dari samping secara utuh.";
+    }
+    if (facingMode === "environment") {
+      return "Kamera belakang landscape aktif. Ikuti countdown suara dan pastikan seluruh tubuh masuk frame.";
+    }
+    if (orientation === "landscape") {
+      return "Kamera depan landscape aktif. Cocok untuk ruang gerak lebih lebar.";
+    }
+    return "Kamera depan portrait aktif. Pastikan kedua tangan, bahu, dan pinggul terlihat.";
+  }
+  if (orientation === "landscape") {
+    return "Untuk gerakan berdiri, pastikan kepala sampai kaki tetap masuk meskipun layar landscape.";
+  }
+  return facingMode === "environment"
+    ? "Kamera belakang aktif. Gunakan countdown suara dan pastikan seluruh tubuh terlihat."
+    : "Kamera depan portrait aktif agar seluruh tinggi tubuh mudah dipantau.";
 }
 
 function LiveHud(props: { repCount: number; validReps: number; elapsedMs: number; trackingValid: boolean; feedback: { code: string; severity: string; message: string }[]; liveMetric?: { label: string; value: number }; targetReps: number | null }) {
