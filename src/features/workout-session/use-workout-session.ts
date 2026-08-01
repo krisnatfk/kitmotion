@@ -27,6 +27,7 @@ export interface LiveState {
   liveMetric?: { label: string; value: number };
   diagnostics?: ExerciseFrameResult["diagnostics"];
   elapsedMs: number;
+  validDurationMs: number;
 }
 
 export interface UseWorkoutSessionArgs {
@@ -73,6 +74,7 @@ export function useWorkoutSession({
     feedback: [],
     trackingValid: false,
     elapsedMs: 0,
+    validDurationMs: 0,
   });
 
   useEffect(() => {
@@ -113,6 +115,7 @@ export function useWorkoutSession({
       trackingValid: true,
       diagnostics: cameraMode ? { cameraMode } : undefined,
       elapsedMs: 0,
+      validDurationMs: 0,
     });
   }, [engine, sensorProvider]);
 
@@ -143,6 +146,7 @@ export function useWorkoutSession({
         trackingValid: result.trackingValid,
         liveMetric: result.liveMetric,
         diagnostics: result.diagnostics,
+        validDurationMs: result.validDurationMs ?? s.validDurationMs,
       }));
     },
     [engine, live.status],
@@ -231,6 +235,7 @@ export function useWorkoutSession({
       clientSessionId,
       exerciseSlug,
       durationSeconds: Math.max(0, Math.round(elapsedMs / 1000)),
+      validDurationSeconds: Math.max(0, Math.round((metrics.validDurationMs ?? elapsedMs) / 1000)),
       targetReps,
       targetSeconds,
       milestoneLevel,
@@ -273,6 +278,7 @@ export function useWorkoutSession({
       feedback: [],
       trackingValid: false,
       elapsedMs: 0,
+      validDurationMs: 0,
     });
   }, [engine, sensorProvider]);
 

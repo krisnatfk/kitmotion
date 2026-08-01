@@ -7,7 +7,7 @@ import { ScrollReveal } from "@/components/ui/scroll-reveal";
 
 const FEATURES: { icon: IconName; number: string; title: string; body: string }[] = [
   { icon: "camera", number: "01", title: "AI pose coach", body: "Kamera membaca titik tubuh secara real-time dan membantumu menjaga posisi selama bergerak." },
-  { icon: "target", number: "02", title: "Repetisi tervalidasi", body: "Setiap repetisi dicek melalui fase gerakan, bukan hanya dihitung dari gerakan acak." },
+  { icon: "target", number: "02", title: "Gerakan tervalidasi", body: "Setiap repetisi atau durasi tahan dicek melalui fase dan syarat teknik, bukan hanya gerakan acak." },
   { icon: "bolt", number: "03", title: "Progress yang terasa", body: "Skor, XP, level, badge, dan streak mengubah rutinitas latihan menjadi progres yang terukur." },
   { icon: "route", number: "04", title: "Lari GPS", body: "Rekam jarak, pace, durasi aktif, dan garis rute pada peta langsung dari GPS perangkatmu." },
 ];
@@ -16,6 +16,9 @@ const EXERCISES = [
   { slug: "squat", name: "Squat", type: "Lower body", target: "12 repetisi", tone: "from-[#d7ff4f] to-[#8db500]" },
   { slug: "jumping-jack", name: "Jumping Jack", type: "Full body", target: "20 repetisi", tone: "from-[#a6dcff] to-[#287ab1]" },
   { slug: "push-up", name: "Push-up", type: "Upper body", target: "10 repetisi", tone: "from-[#ffbb91] to-[#b95029]" },
+  { slug: "sit-up", name: "Sit-up", type: "Core", target: "15 repetisi", tone: "from-[#ffd889] to-[#bc7429]" },
+  { slug: "pull-up", name: "Pull-up", type: "Upper body", target: "6 repetisi", tone: "from-[#c5b8ff] to-[#6651ad]" },
+  { slug: "chinning-up", name: "Chinning-up", type: "Static hold", target: "30 detik", tone: "from-[#a8efcf] to-[#277a59]" },
 ];
 
 const RUNNING_BENEFITS: { icon: IconName; title: string; body: string }[] = [
@@ -136,7 +139,7 @@ export default function LandingPage() {
             </div>
             <ButtonLink href="/register" variant="secondary">Buka semua latihan <Icon name="arrow" className="h-4 w-4" /></ButtonLink>
           </div>
-          <div className="mt-section grid gap-lg tablet-narrow:grid-cols-3">
+          <div className="mt-section grid gap-lg tablet-narrow:grid-cols-2 desktop-small:grid-cols-3">
             {EXERCISES.map((exercise, index) => (
               <Link key={exercise.slug} href="/register" className="group overflow-hidden rounded-sm bg-soft-cloud">
                 <div className={`relative aspect-[4/3] overflow-hidden bg-gradient-to-br ${exercise.tone}`}>
@@ -182,7 +185,7 @@ export default function LandingPage() {
             <h2 className="mt-md font-display text-5xl uppercase leading-none tablet-narrow:text-7xl">Siap bergerak dalam hitungan detik</h2>
             <ol className="mt-xl divide-y divide-black/10 border-y border-black/10">
               {[
-                ["01", "Pilih latihan", "Pilih squat, jumping jack, atau push-up sesuai targetmu."],
+                ["01", "Pilih latihan", "Pilih dari squat, jumping jack, push-up, sit-up, pull-up, atau chinning-up."],
                 ["02", "Aktifkan kamera", "Posisikan seluruh tubuh di dalam frame. Video diproses di perangkatmu."],
                 ["03", "Ikuti feedback", "Bergerak, perbaiki teknik, lalu lihat skor dan perkembanganmu."],
               ].map(([number, title, body]) => <li key={number} className="grid grid-cols-[auto_1fr] gap-lg py-lg"><span className="font-display text-2xl text-mute">{number}</span><div><h3 className="font-semibold">{title}</h3><p className="mt-xs text-sm leading-relaxed text-mute">{body}</p></div></li>)}

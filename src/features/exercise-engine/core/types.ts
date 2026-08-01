@@ -73,6 +73,8 @@ export interface ExerciseFrameResult {
   trackingValid: boolean;
   /** Optional live metric for display (e.g. current knee angle). */
   liveMetric?: { label: string; value: number };
+  /** Valid time accumulated by a form-gated static hold exercise. */
+  validDurationMs?: number;
   diagnostics?: {
     cameraMode?: PoseCameraMode;
     leftElbowAngle?: number;
@@ -95,6 +97,8 @@ export interface ExerciseSessionMetrics {
   tempoScore: number;
   stabilityScore: number;
   durationMs: number;
+  /** Present for timed holds; excludes time spent outside the required pose. */
+  validDurationMs?: number;
 }
 
 /** Tunable per-engine config (stored as jsonb in exercise_versions.config). */

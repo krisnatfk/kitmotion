@@ -40,10 +40,16 @@ export default async function TeacherClassReportPage({
     commonIssues: report.commonIssues,
     weekly: report.weekly,
   }), null, 8_000);
+  const exportParams = new URLSearchParams();
+  for (const key of ["student", "exercise", "from", "to"] as const) {
+    const value = query[key];
+    if (value) exportParams.set(key, value);
+  }
+  const exportHref = `/teacher/classes/${classId}/export${exportParams.size ? `?${exportParams.toString()}` : ""}`;
   return (
     <Container className="py-xl tablet-narrow:py-section">
       <Link href="/teacher" className="inline-flex items-center gap-sm text-sm text-mute"><Icon name="arrow" className="h-4 w-4 rotate-180" /> Dashboard guru</Link>
-      <header className="mt-lg"><p className="eyebrow text-mute">Laporan kelas · {report.classroom.school_year ?? "Tahun berjalan"}</p><h1 className="mt-sm font-display text-5xl uppercase tablet-narrow:text-6xl">{report.classroom.name}</h1></header>
+      <header className="mt-lg flex flex-col gap-lg tablet-narrow:flex-row tablet-narrow:items-end tablet-narrow:justify-between"><div><p className="eyebrow text-mute">Laporan kelas · {report.classroom.school_year ?? "Tahun berjalan"}</p><h1 className="mt-sm font-display text-5xl uppercase tablet-narrow:text-6xl">{report.classroom.name}</h1></div><div className="tablet-narrow:text-right"><a href={exportHref} download className="btn-primary inline-flex min-h-12 items-center gap-sm px-xl"><Icon name="arrow" className="h-4 w-4 rotate-90" /> Export PDF</a><p className="mt-sm text-[10px] leading-relaxed text-mute">PDF mengikuti filter laporan yang sedang aktif.</p></div></header>
       {query.success && <div role="status" className="mt-lg rounded-sm bg-[#eaf7ee] p-md text-sm text-success">{query.success}</div>}
 
       <form method="get" className="mt-xl grid gap-sm rounded-sm bg-white p-lg tablet-narrow:grid-cols-4 desktop-small:grid-cols-[1fr_1fr_160px_160px_auto]">
@@ -71,7 +77,7 @@ export default async function TeacherClassReportPage({
       <section className="mt-section grid gap-lg desktop-small:grid-cols-[1fr_340px]">
         <div className="overflow-hidden rounded-sm bg-white">
           <div className="border-b border-hairline-soft p-xl"><h2 className="font-display text-3xl uppercase">Aktivitas siswa</h2></div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-soft-cloud text-[10px] uppercase tracking-widest text-mute"><tr><th className="p-md">Siswa</th><th className="p-md">Latihan</th><th className="p-md">Tanggal</th><th className="p-md">Repetisi</th><th className="p-md">Skor</th><th className="p-md">Durasi</th><th className="p-md">Level/XP</th></tr></thead><tbody className="divide-y divide-hairline-soft">{report.rows.map((row) => <tr key={row.id}><td className="p-md font-semibold">{row.studentName}</td><td className="p-md">{row.exerciseName}</td><td className="p-md text-mute">{formatDate(row.completed_at)}</td><td className="p-md">{row.valid_reps} valid</td><td className="p-md font-semibold">{Math.round(Number(row.final_score ?? 0))}</td><td className="p-md">{formatDuration(row.duration_seconds)}</td><td className="p-md">Lv {row.level} · {row.xp} XP</td></tr>)}{report.rows.length === 0 && <tr><td colSpan={7} className="p-xl text-center text-mute">Belum ada aktivitas untuk filter ini.</td></tr>}</tbody></table></div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-soft-cloud text-[10px] uppercase tracking-widest text-mute"><tr><th className="p-md">Siswa</th><th className="p-md">Latihan</th><th className="p-md">Tanggal</th><th className="p-md">Hasil valid</th><th className="p-md">Skor</th><th className="p-md">Durasi</th><th className="p-md">Level/XP</th></tr></thead><tbody className="divide-y divide-hairline-soft">{report.rows.map((row) => <tr key={row.id}><td className="p-md font-semibold">{row.studentName}</td><td className="p-md">{row.exerciseName}</td><td className="p-md text-mute">{formatDate(row.completed_at)}</td><td className="p-md">{formatValidResult(row.valid_reps, row.validDurationSeconds)}</td><td className="p-md font-semibold">{Math.round(Number(row.final_score ?? 0))}</td><td className="p-md">{formatDuration(row.duration_seconds)}</td><td className="p-md">Lv {row.level} · {row.xp} XP</td></tr>)}{report.rows.length === 0 && <tr><td colSpan={7} className="p-xl text-center text-mute">Belum ada aktivitas untuk filter ini.</td></tr>}</tbody></table></div>
         </div>
         <aside className="h-fit rounded-sm bg-sport-black p-xl text-white"><p className="text-xs font-bold uppercase tracking-widest text-white/45">Kesalahan yang sering terjadi</p><div className="mt-lg space-y-sm">{report.commonIssues.map((issue, index) => <article key={issue.code} className="rounded-sm border border-white/10 p-md"><div className="flex items-center justify-between"><span className="font-display text-2xl text-sport-lime">0{index + 1}</span><span className="text-xs font-bold">{issue.count}×</span></div><p className="mt-sm text-xs leading-relaxed text-white/65">{issue.message}</p></article>)}{report.commonIssues.length === 0 && <p className="text-sm text-white/50">Belum ada feedback kesalahan pada sesi terpilih.</p>}</div></aside>
       </section>
@@ -85,3 +91,4 @@ function Summary({ label, value, icon }: { label: string; value: string; icon: "
 function formatDate(value: string | null) { return value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "—"; }
 function formatShortDate(value: string) { return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short" }).format(new Date(`${value}T00:00:00Z`)); }
 function formatDuration(seconds: number) { const hours = Math.floor(seconds / 3600); const minutes = Math.floor((seconds % 3600) / 60); return hours ? `${hours}j ${minutes}m` : `${minutes}m`; }
+function formatValidResult(reps: number, seconds: number) { return seconds > 0 ? `${seconds} detik` : `${reps} repetisi`; }

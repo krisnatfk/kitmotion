@@ -12,6 +12,7 @@ export interface SessionRewardInput {
   finalScore: number;
   validReps: number;
   durationSeconds: number;
+  validDurationSeconds: number;
   targetReps: number | null;
   targetSeconds: number | null;
   startedAt: string | null;
@@ -191,7 +192,7 @@ function isTargetMet(input: SessionRewardInput): boolean {
     return input.validReps >= input.targetReps;
   }
   if (input.targetSeconds != null && input.targetSeconds > 0) {
-    return input.durationSeconds >= input.targetSeconds;
+    return input.validDurationSeconds >= input.targetSeconds;
   }
   return false;
 }

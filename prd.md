@@ -34,7 +34,7 @@ Kesiapan integrasi hanya dilakukan melalui struktur kode, interface, feature fla
 
 1. Membuat aplikasi olahraga yang dapat diakses melalui browser.
 2. Membaca pose tubuh pengguna melalui kamera.
-3. Menghitung repetisi squat, jumping jack, dan push-up.
+3. Menilai squat, jumping jack, push-up, sit-up, pull-up, serta durasi valid chinning-up.
 4. Memberikan nilai dan feedback yang mudah dipahami.
 5. Menyimpan hasil latihan.
 6. Menampilkan level, XP, badge, dan tantangan.
@@ -128,31 +128,34 @@ KITMOTION dibangun sebagai:
 10. Squat.
 11. Jumping jack.
 12. Push-up.
-13. Pemeriksaan kamera.
-14. Pose detection.
-15. Overlay landmark.
-16. Penghitungan repetisi.
-17. Penilaian gerakan.
-18. Feedback real-time.
-19. Timer latihan.
-20. Target repetisi atau durasi.
-21. Halaman hasil.
-22. Riwayat latihan.
-23. Statistik perkembangan sederhana.
-24. XP.
-25. Level.
-26. Badge.
-27. Tantangan harian.
-28. Admin minimum.
-29. PWA.
-30. Error handling.
-31. Loading, empty, success, dan error state.
-32. Fondasi integrasi IoT nonaktif.
-33. Akun guru dan dashboard guru.
-34. Kelas, kode undangan, dan persetujuan siswa.
-35. Laporan guru dengan filter dan rekap.
-36. Target latihan mengikuti level.
-37. Challenge kenaikan level pada kelipatan 10.
+13. Sit-up.
+14. Pull-up.
+15. Chinning-up (gantung siku tekuk berbasis durasi valid).
+16. Pemeriksaan kamera.
+17. Pose detection.
+18. Overlay landmark.
+19. Penghitungan repetisi dan durasi tahan valid.
+20. Penilaian gerakan.
+21. Feedback real-time.
+22. Timer latihan.
+23. Target repetisi atau durasi.
+24. Halaman hasil.
+25. Riwayat latihan.
+26. Statistik perkembangan sederhana.
+27. XP.
+28. Level.
+29. Badge.
+30. Tantangan harian.
+31. Admin minimum.
+32. PWA.
+33. Error handling.
+34. Loading, empty, success, dan error state.
+35. Fondasi integrasi IoT nonaktif.
+36. Akun guru dan dashboard guru.
+37. Kelas, kode undangan, dan persetujuan siswa.
+38. Laporan guru dengan filter dan rekap.
+39. Target latihan mengikuti level.
+40. Challenge kenaikan level pada kelipatan 10.
 
 ### 7.2 Fitur setelah MVP
 
@@ -252,7 +255,7 @@ flowchart TD
 - **FR-053** Sistem menghasilkan metrik per repetisi.
 - **FR-054** Sistem memberikan feedback.
 - **FR-055** Sistem menyimpan versi algoritma.
-- **FR-056** Squat, jumping jack, dan push-up tidak digabung dalam satu aturan besar.
+- **FR-056** Squat, jumping jack, push-up, sit-up, pull-up, dan chinning-up memiliki aturan penilaian masing-masing.
 
 ### 9.7 Sesi latihan
 

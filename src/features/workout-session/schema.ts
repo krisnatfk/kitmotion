@@ -34,6 +34,7 @@ export const finalizeSessionSchema = z.object({
   clientSessionId: z.string().uuid(),
   exerciseSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   durationSeconds: z.number().int().nonnegative().max(24 * 60 * 60),
+  validDurationSeconds: z.number().int().nonnegative().max(24 * 60 * 60),
   targetReps: z.number().int().nonnegative().nullable(),
   targetSeconds: z.number().int().nonnegative().nullable(),
   milestoneLevel: z.number().int().positive().multipleOf(10).nullable().default(null),

@@ -65,6 +65,7 @@ export default async function ExerciseDetailPage({
     mistakes: stringArray(tutorialRow.common_mistakes, fallbackTutorial.mistakes),
     safety: stringArray(tutorialRow.safety_tips, fallbackTutorial.safety),
     animationUrl: tutorialRow.animation_url ?? fallbackTutorial.animationUrl,
+    assessment: fallbackTutorial.assessment,
   } : fallbackTutorial;
   const levelTargetReps = targetRepsForLevel(exercise.default_target_reps, progress?.current_level ?? 1);
   const displayedTargetReps = milestoneChallenge?.target_reps ?? levelTargetReps;
@@ -190,6 +191,19 @@ export default async function ExerciseDetailPage({
               <p className="mt-sm max-w-2xl text-sm leading-relaxed text-charcoal">{tutorial.startPosition}</p>
             </div>
 
+            <article className="mt-section rounded-sm bg-sport-black p-xl text-white" aria-labelledby="assessment-title">
+              <div className="flex flex-col gap-lg tablet-narrow:flex-row tablet-narrow:items-start tablet-narrow:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-sport-lime">Cara penilaian kamera</p>
+                  <h2 id="assessment-title" className="mt-xs font-display text-4xl uppercase">{tutorial.assessment.title}</h2>
+                </div>
+                <span className="w-fit rounded-full bg-sport-lime px-md py-sm text-[10px] font-bold uppercase tracking-widest text-sport-black">Satuan: {tutorial.assessment.unit}</span>
+              </div>
+              <ol className="mt-xl grid gap-sm tablet-narrow:grid-cols-3">
+                {tutorial.assessment.rules.map((rule, index) => <li key={rule} className="flex gap-md rounded-sm border border-white/10 bg-white/[0.04] p-lg"><span className="font-display text-2xl text-sport-lime">0{index + 1}</span><span className="pt-xs text-xs leading-relaxed text-white/70">{rule}</span></li>)}
+              </ol>
+            </article>
+
             <div className="mt-section">
               <h2 className="font-display text-4xl uppercase tablet-narrow:text-5xl">
                 Tahapan gerakan
@@ -237,8 +251,8 @@ export default async function ExerciseDetailPage({
           <aside className="h-fit rounded-sm bg-white p-xl desktop-small:sticky desktop-small:top-28">
             <p className="text-xs font-bold uppercase tracking-widest text-mute">Target sesi</p>
             <div className="mt-lg flex items-end justify-between border-b border-hairline-soft pb-lg">
-              <span className="text-sm text-mute">Repetisi bawaan</span>
-              <strong className="font-display text-4xl">{displayedTargetReps ?? "—"}</strong>
+              <span className="text-sm text-mute">{displayedTargetReps ? "Repetisi bawaan" : "Durasi valid bawaan"}</span>
+              <strong className="font-display text-4xl">{displayedTargetReps ?? (exercise.default_target_seconds ? `${exercise.default_target_seconds}s` : "—")}</strong>
             </div>
             <div className="flex items-end justify-between border-b border-hairline-soft py-lg">
               <span className="text-sm text-mute">Durasi</span>

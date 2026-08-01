@@ -1,5 +1,6 @@
 import { getSupabaseServer, getSupabaseServiceRole } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
+import type { LevelDefinition } from "@/features/gamification/level";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type UserProgress = Database["public"]["Tables"]["user_progress"]["Row"];
@@ -96,6 +97,19 @@ export async function getCurrentProgress(): Promise<UserProgress | null> {
     }
   }
   return null;
+}
+
+export async function getLevelDefinitions(): Promise<LevelDefinition[]> {
+  const { supabase } = await getCurrentUser();
+  const { data } = await supabase
+    .from("level_definitions")
+    .select("level, name, min_total_xp")
+    .order("min_total_xp", { ascending: true });
+  return (data ?? []).map((definition) => ({
+    level: definition.level,
+    name: definition.name,
+    minTotalXp: definition.min_total_xp,
+  }));
 }
 
 export async function listSchools(): Promise<School[]> {

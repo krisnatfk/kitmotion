@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { FieldError, FormError, Input, Label } from "@/components/ui/field";
 import { saveVersionAction, type AdminResult } from "./actions";
 
-const ENGINE_KEYS = ["squat", "jumping-jack", "push-up"];
+const ENGINE_KEYS = ["squat", "jumping-jack", "push-up", "sit-up", "pull-up", "chinning-up"];
 
 export function AdminVersionForm({ exerciseId }: { exerciseId: string }) {
   const router = useRouter();

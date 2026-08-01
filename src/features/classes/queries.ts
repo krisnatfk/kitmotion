@@ -87,6 +87,7 @@ export async function getTeacherClassReport(classId: string, filters: TeacherRep
   if (profile.role !== "teacher") redirect("/dashboard");
   const { data: classroom } = await admin.from("classrooms").select("id, name, school_year, teacher_id").eq("id", classId).single();
   if (!classroom || classroom.teacher_id !== user.id) redirect("/teacher");
+  const teacher = { id: profile.id, full_name: profile.full_name };
 
   const { data: memberships } = await admin.from("class_memberships")
     .select("student_id, joined_at, consented_at")
@@ -95,7 +96,7 @@ export async function getTeacherClassReport(classId: string, filters: TeacherRep
   const allStudentIds = (memberships ?? []).map((row) => row.student_id);
   let sessionStudentIds = allStudentIds;
   if (filters.student && allStudentIds.includes(filters.student)) sessionStudentIds = [filters.student];
-  if (!allStudentIds.length) return { classroom, students: [], exercises: [], summary: emptySummary(), rows: [], commonIssues: [], weekly: [] };
+  if (!allStudentIds.length) return { classroom, teacher, students: [], exercises: [], summary: emptySummary(), rows: [], commonIssues: [], weekly: [] };
 
   const [{ data: students }, { data: progress }, { data: exercises }, { data: challengeProgress }, { data: milestones }] = await Promise.all([
     admin.from("profiles").select("id, full_name, class_name").in("id", allStudentIds).order("full_name"),
@@ -106,7 +107,7 @@ export async function getTeacherClassReport(classId: string, filters: TeacherRep
   ]);
   const exerciseMap = new Map((exercises ?? []).map((row) => [row.id, row]));
   let sessionQuery = admin.from("workout_sessions")
-    .select("id, user_id, exercise_id, completed_at, duration_seconds, valid_reps, invalid_reps, final_score")
+    .select("id, user_id, exercise_id, completed_at, duration_seconds, valid_reps, invalid_reps, final_score, metadata")
     .in("user_id", sessionStudentIds)
     .eq("status", "completed")
     .order("completed_at", { ascending: false });
@@ -129,6 +130,7 @@ export async function getTeacherClassReport(classId: string, filters: TeacherRep
     studentName: studentMap.get(session.user_id)?.full_name ?? "Siswa",
     exerciseName: exerciseMap.get(session.exercise_id)?.name ?? "Latihan",
     exerciseSlug: exerciseMap.get(session.exercise_id)?.slug ?? "",
+    validDurationSeconds: readValidDurationSeconds(session.metadata),
     level: progressMap.get(session.user_id)?.current_level ?? 1,
     xp: progressMap.get(session.user_id)?.total_xp ?? 0,
   }));
@@ -147,6 +149,7 @@ export async function getTeacherClassReport(classId: string, filters: TeacherRep
   const summary = {
     totalSessions,
     totalReps: rows.reduce((sum, row) => sum + row.valid_reps, 0),
+    validDurationSeconds: rows.reduce((sum, row) => sum + row.validDurationSeconds, 0),
     averageScore: totalSessions ? Math.round(rows.reduce((sum, row) => sum + Number(row.final_score ?? 0), 0) / totalSessions) : 0,
     durationSeconds: rows.reduce((sum, row) => sum + row.duration_seconds, 0),
   };
@@ -170,6 +173,7 @@ export async function getTeacherClassReport(classId: string, filters: TeacherRep
   })).sort((a, b) => a.week.localeCompare(b.week)).slice(-8);
   return {
     classroom,
+    teacher,
     students: (students ?? []).map((student) => ({ ...student, level: progressMap.get(student.id)?.current_level ?? 1, xp: progressMap.get(student.id)?.total_xp ?? 0, challengesCompleted: challengeCounts.get(student.id) ?? 0 })),
     exercises: exercises ?? [],
     summary,
@@ -179,8 +183,16 @@ export async function getTeacherClassReport(classId: string, filters: TeacherRep
   };
 }
 
+export type TeacherClassReport = Awaited<ReturnType<typeof getTeacherClassReport>>;
+
 function emptySummary() {
-  return { totalSessions: 0, totalReps: 0, averageScore: 0, durationSeconds: 0 };
+  return { totalSessions: 0, totalReps: 0, validDurationSeconds: 0, averageScore: 0, durationSeconds: 0 };
+}
+
+function readValidDurationSeconds(metadata: unknown): number {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return 0;
+  const value = (metadata as Record<string, unknown>).valid_duration_seconds;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
 }
 
 function weekStart(value: string): string {

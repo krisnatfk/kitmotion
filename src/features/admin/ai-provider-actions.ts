@@ -323,11 +323,11 @@ async function probeFeatureContracts(config: AIConfig): Promise<{ responseFormat
     schema: dailyRecommendationContentSchema,
     jsonSchema: dailyRecommendationJsonSchema,
     systemPrompt: "Pilih tepat satu slug dari daftar dan keluarkan JSON bahasa Indonesia sesuai schema.",
-    input: { availableExercises: ["squat", "jumping-jack", "push-up"], recentSessions: [{ exerciseSlug: "squat", score: 78 }] },
+    input: { availableExercises: ["squat", "jumping-jack", "push-up", "sit-up", "pull-up", "chinning-up"], recentSessions: [{ exerciseSlug: "squat", score: 78 }] },
     timeoutMs: 10_000,
     providerConfig: detectedConfig,
   });
-  if (!recommendation || !["squat", "jumping-jack", "push-up"].includes(recommendation.data.exerciseSlug)) return null;
+  if (!recommendation || !["squat", "jumping-jack", "push-up", "sit-up", "pull-up", "chinning-up"].includes(recommendation.data.exerciseSlug)) return null;
   const teacher = await generateStructuredCompletion({
     schemaName: "kitmotion_teacher_class_test",
     schema: teacherClassContentSchema,

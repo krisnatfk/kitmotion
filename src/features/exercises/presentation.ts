@@ -20,6 +20,21 @@ const EXERCISE_VISUALS: Record<string, ExerciseVisual> = {
     alt: "Atlet memperagakan posisi push-up yang benar",
     cue: "Tampak samping · tubuh tetap lurus",
   },
+  "sit-up": {
+    src: "/images/exercises/sit-up-guide.webp",
+    alt: "Atlet memperagakan posisi atas sit-up dengan punggung lurus",
+    cue: "Tampak samping · dada mencapai lutut",
+  },
+  "pull-up": {
+    src: "/images/exercises/pull-up-guide.webp",
+    alt: "Atlet memperagakan pull-up dengan dagu melewati palang",
+    cue: "Tampak depan · dagu di atas palang",
+  },
+  "chinning-up": {
+    src: "/images/exercises/chinning-up-guide.webp",
+    alt: "Atlet mempertahankan posisi chinning-up dengan siku ditekuk",
+    cue: "Tampak depan · tahan siku tekuk",
+  },
 };
 
 const FALLBACK_VISUAL: ExerciseVisual = {

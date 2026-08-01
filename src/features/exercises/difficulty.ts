@@ -30,6 +30,14 @@ export function exerciseConfigForLevel(
     const kneeDownMax = Number(next.kneeDownMax ?? 105);
     next.kneeDownMax = Math.max(90, kneeDownMax - tier * 2);
   }
+  if (engineKey === "sit-up") {
+    next.chestKneeMaxRatio = tighten(Number(next.chestKneeMaxRatio ?? 0.72), tier, 0.58);
+    next.backStraightMin = Math.min(165, Number(next.backStraightMin ?? 150) + tier * 2);
+  }
+  if (engineKey === "pull-up" || engineKey === "chinning-up") {
+    next.elbowSymmetryMaxDelta = tighten(Number(next.elbowSymmetryMaxDelta ?? 20), tier, 12);
+    next.bodySwingMaxRatio = tighten(Number(next.bodySwingMaxRatio ?? 0.28), tier, 0.16);
+  }
   return next;
 }
 

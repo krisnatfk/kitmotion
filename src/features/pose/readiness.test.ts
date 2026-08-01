@@ -3,6 +3,7 @@ import { checkReadiness } from "./readiness";
 import { toPoseFrame } from "./normalize";
 import { POSE_LANDMARKS } from "@/features/exercise-engine/core/landmarks";
 import type { NormalizedLandmark } from "@/features/exercise-engine/core/types";
+import { pullUpFrame } from "@/features/exercise-engine/pull-up/test-frames";
 
 function fullBody(visibility = 0.9): NormalizedLandmark[] {
   return Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, z: 0, visibility }));
@@ -110,6 +111,30 @@ describe("checkReadiness", () => {
     setLandmark(lm, POSE_LANDMARKS.LEFT_KNEE, 0.64, 0.5);
     setLandmark(lm, POSE_LANDMARKS.LEFT_ANKLE, 0.8, 0.5);
     expect(checkReadiness(lm, "push-up").status).toBe("side-cut");
+  });
+
+  it("accepts the required lying start position for sit-up", () => {
+    const lm = fullBody(0.1);
+    for (const [index, x, y] of [
+      [POSE_LANDMARKS.LEFT_EAR, 0.15, 0.6],
+      [POSE_LANDMARKS.LEFT_SHOULDER, 0.25, 0.6],
+      [POSE_LANDMARKS.LEFT_HIP, 0.5, 0.6],
+      [POSE_LANDMARKS.LEFT_KNEE, 0.75, 0.6],
+      [POSE_LANDMARKS.LEFT_ANKLE, 0.75, 0.85],
+    ] as const) setLandmark(lm, index, x, y);
+    const result = checkReadiness(lm, "sit-up");
+    expect(result.status).toBe("ready");
+    expect(result.cameraMode).toBe("side");
+  });
+
+  it("requires a straight-arm hang before starting pull-up", () => {
+    expect(checkReadiness(pullUpFrame("hang", 1000).landmarks, "pull-up").status).toBe("ready");
+    expect(checkReadiness(pullUpFrame("mid", 1000).landmarks, "pull-up").status).toBe("wrong-pose");
+  });
+
+  it("requires the chin-above-bar hold before starting chinning-up", () => {
+    expect(checkReadiness(pullUpFrame("top", 1000).landmarks, "chinning-up").status).toBe("ready");
+    expect(checkReadiness(pullUpFrame("mid", 1000).landmarks, "chinning-up").status).toBe("wrong-pose");
   });
 });
 

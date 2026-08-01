@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Container } from "@/components/ui/container";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
-import { getCurrentProfile, getCurrentProgress, getDashboardGamification } from "@/features/profile/queries";
+import { getCurrentProfile, getCurrentProgress, getDashboardGamification, getLevelDefinitions } from "@/features/profile/queries";
 import { listExercises } from "@/features/exercises/queries";
 import { getDailyRecommendation } from "@/features/ai-coach/insights";
 import { withTimeoutFallback } from "@/lib/async";
@@ -14,17 +14,26 @@ const EMPTY_GAMIFICATION = { badges: [], challenges: [], milestone: null };
 export default async function DashboardPage() {
   // Authentication is enforced by middleware. Optional dashboard data gets a
   // deadline so one unavailable Supabase table cannot blank the entire route.
-  const [profile, progress, exercises, gamification, dailyRecommendation] = await Promise.all([
+  const [profile, progress, exercises, gamification, dailyRecommendation, levelDefinitions] = await Promise.all([
     withTimeoutFallback(getCurrentProfile(), null),
     withTimeoutFallback(getCurrentProgress(), null),
     withTimeoutFallback(listExercises(), []),
     withTimeoutFallback(getDashboardGamification(), EMPTY_GAMIFICATION),
     withTimeoutFallback(getDailyRecommendation(), null, 12_000),
+    withTimeoutFallback(getLevelDefinitions(), []),
   ]);
   const totalXp = progress?.total_xp ?? 0;
   const level = progress?.current_level ?? 1;
   const streak = progress?.current_streak ?? 0;
   const sessions = progress?.total_sessions ?? 0;
+  const orderedLevels = [...levelDefinitions].sort((a, b) => a.minTotalXp - b.minTotalXp);
+  const currentLevelDefinition = orderedLevels.find((definition) => definition.level === level);
+  const nextLevelDefinition = orderedLevels.find((definition) => definition.level > level);
+  const currentLevelXp = currentLevelDefinition?.minTotalXp ?? 0;
+  const nextLevelXp = nextLevelDefinition?.minTotalXp ?? currentLevelXp;
+  const levelSpan = Math.max(1, nextLevelXp - currentLevelXp);
+  const levelProgress = nextLevelDefinition ? Math.min(100, Math.max(0, ((totalXp - currentLevelXp) / levelSpan) * 100)) : 100;
+  const xpRemaining = nextLevelDefinition ? Math.max(0, nextLevelXp - totalXp) : 0;
   const featured = exercises.find((exercise) => exercise.slug === dailyRecommendation?.exerciseSlug) ?? exercises[0];
   const targetLabel = dailyRecommendation?.targetSeconds
     ? `${dailyRecommendation.targetSeconds} detik`
@@ -93,8 +102,8 @@ export default async function DashboardPage() {
 
         <aside className="rounded-sm bg-sport-black p-xl text-white">
           <div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-widest text-white/45">Performa kamu</p><h2 className="mt-xs font-display text-3xl uppercase">Level {level}</h2></div><div className="grid h-16 w-16 place-items-center rounded-full border-4 border-sport-lime font-display text-2xl">{level}</div></div>
-          <div className="mt-xl h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-sport-lime" style={{ width: `${Math.min(100, totalXp % 100)}%` }} /></div>
-          <p className="mt-sm text-xs text-white/45">{totalXp} total XP · terus bergerak untuk naik level</p>
+          <div className="mt-xl h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-sport-lime" style={{ width: `${levelProgress}%` }} /></div>
+          <p className="mt-sm text-xs text-white/45">{nextLevelDefinition ? `${totalXp}/${nextLevelXp} XP · ${xpRemaining} XP lagi ke level ${nextLevelDefinition.level}` : `${totalXp} total XP · level tertinggi tercapai`}</p>
           <div className="mt-xl grid grid-cols-2 gap-sm">
             <Stat label="Total XP" value={String(totalXp)} icon="bolt" />
             <Stat label="Sesi" value={String(sessions)} icon="activity" />
@@ -103,6 +112,28 @@ export default async function DashboardPage() {
           </div>
           <Link href="/history" className="mt-lg flex min-h-12 items-center justify-between border-t border-white/10 pt-lg text-sm font-semibold text-white/75 hover:text-sport-lime">Lihat laporan lengkap <Icon name="arrow" className="h-4 w-4" /></Link>
         </aside>
+      </section>
+
+      <section className="mt-lg grid gap-md desktop-small:grid-cols-2" aria-label="Cara kerja penilaian dan level">
+        <article className="rounded-sm bg-white p-xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-mute">Cara kerja penilaian</p>
+          <h2 className="mt-xs font-display text-3xl uppercase">Skor sesi 0–100</h2>
+          <p className="mt-md text-sm leading-relaxed text-charcoal">Kamera hanya menyimpan repetisi atau detik tahan yang memenuhi aturan gerakan. Skor akhir menggabungkan lima komponen berikut.</p>
+          <div className="mt-lg grid grid-cols-2 gap-sm text-xs mobile-landscape:grid-cols-5">
+            {[["Bentuk", "40%"], ["Rentang", "25%"], ["Konsistensi", "15%"], ["Tempo", "10%"], ["Stabilitas", "10%"]].map(([label, weight]) => <div key={label} className="rounded-sm bg-soft-cloud p-md"><p className="text-mute">{label}</p><p className="mt-xs font-display text-2xl">{weight}</p></div>)}
+          </div>
+          <p className="mt-md text-xs text-mute">Grade: A ≥90 · B ≥80 · C ≥70 · D ≥60 · E di bawah 60.</p>
+        </article>
+        <article className="rounded-sm bg-sport-lime p-xl">
+          <p className="text-xs font-bold uppercase tracking-widest">Cara naik level</p>
+          <h2 className="mt-xs font-display text-3xl uppercase">Kumpulkan XP</h2>
+          <p className="mt-md text-sm leading-relaxed text-black/70">Setiap sesi memberi 20 XP dasar, bonus skor 0–20 XP, dan bonus target 15 XP. Badge, challenge, dan milestone dapat memberi XP tambahan.</p>
+          <div className="mt-lg rounded-sm bg-sport-black p-lg text-white">
+            <div className="flex items-end justify-between gap-md"><div><p className="text-[10px] uppercase tracking-widest text-white/45">Posisi sekarang</p><p className="mt-xs font-display text-3xl">Level {level}</p></div><p className="text-right text-xs text-white/60">{currentLevelDefinition?.name ?? "Atlet KITMOTION"}<br />{totalXp} total XP</p></div>
+            <p className="mt-md border-t border-white/10 pt-md text-xs text-white/60">{nextLevelDefinition ? (xpRemaining > 0 ? `Capai ${nextLevelXp} XP untuk level ${nextLevelDefinition.level}.` : `Syarat XP level ${nextLevelDefinition.level} sudah tercapai. Selesaikan challenge milestone bila level masih terkunci.`) : "Semua level yang tersedia sudah terbuka."}</p>
+          </div>
+          <p className="mt-md text-xs leading-relaxed text-black/60">Setiap melewati batas level 10, 20, 30, dan seterusnya, challenge milestone wajib diselesaikan untuk membuka kelompok level berikutnya.</p>
+        </article>
       </section>
 
       <section className="mt-lg grid gap-md tablet-narrow:grid-cols-2 desktop-small:grid-cols-4" aria-label="Akses cepat fitur">

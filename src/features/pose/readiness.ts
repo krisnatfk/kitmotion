@@ -2,6 +2,11 @@ import type { NormalizedLandmark } from "@/features/exercise-engine/core/types";
 import { angleBetweenDegrees } from "@/features/exercise-engine/core/angles";
 import { POSE_LANDMARKS } from "@/features/exercise-engine/core/landmarks";
 import { readFrontArmGeometry } from "@/features/exercise-engine/push-up/geometry";
+import { readSitUpKinematics } from "@/features/exercise-engine/sit-up/engine";
+import { SIT_UP_DEFAULT_CONFIG } from "@/features/exercise-engine/sit-up/config";
+import { readPullUpKinematics } from "@/features/exercise-engine/pull-up/engine";
+import { PULL_UP_DEFAULT_CONFIG } from "@/features/exercise-engine/pull-up/config";
+import { CHINNING_UP_DEFAULT_CONFIG } from "@/features/exercise-engine/chinning-up/config";
 
 export type ReadinessStatus = "no-body" | "too-close" | "too-far" | "side-cut" | "wrong-pose" | "ready";
 
@@ -36,6 +41,10 @@ export function checkReadiness(
 
   if (exerciseSlug === "push-up") {
     return checkPushUpReadiness(landmarks, worldLandmarks, visible);
+  }
+  if (exerciseSlug === "sit-up") return checkSitUpReadiness(landmarks);
+  if (exerciseSlug === "pull-up" || exerciseSlug === "chinning-up") {
+    return checkHangingReadiness(landmarks, exerciseSlug);
   }
 
   // Key joints must be visible on at least one side.
@@ -90,6 +99,85 @@ export function checkReadiness(
   }
 
   return { status: "ready", message: "Posisi sudah baik. Mulai latihan.", visibleLandmarks: requiredVisible };
+}
+
+function checkSitUpReadiness(landmarks: NormalizedLandmark[]): ReadinessResult {
+  const kinematics = readSitUpKinematics(landmarks, SIT_UP_DEFAULT_CONFIG);
+  if (!kinematics.trackingValid) {
+    return {
+      status: "side-cut",
+      message: "Hadapkan tubuh ke samping kamera. Pastikan kepala, bahu, pinggul, lutut, dan kaki terlihat.",
+      visibleLandmarks: visibleCount(landmarks),
+      cameraMode: "side",
+    };
+  }
+  const extent = poseExtent(landmarks, [
+    POSE_LANDMARKS.LEFT_EAR, POSE_LANDMARKS.RIGHT_EAR,
+    POSE_LANDMARKS.LEFT_SHOULDER, POSE_LANDMARKS.RIGHT_SHOULDER,
+    POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP,
+    POSE_LANDMARKS.LEFT_KNEE, POSE_LANDMARKS.RIGHT_KNEE,
+    POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE,
+  ]);
+  if (extent < 0.38) {
+    return { status: "too-far", message: "Tubuh terlalu kecil. Dekatkan kamera tanpa memotong kepala atau kaki.", visibleLandmarks: visibleCount(landmarks), cameraMode: "side" };
+  }
+  if (kinematics.hipAngle < SIT_UP_DEFAULT_CONFIG.hipDownMin) {
+    return { status: "wrong-pose", message: "Mulai telentang dengan punggung lurus di matras.", visibleLandmarks: 5, cameraMode: "side" };
+  }
+  if (kinematics.kneeAngle < SIT_UP_DEFAULT_CONFIG.kneeBentMin || kinematics.kneeAngle > SIT_UP_DEFAULT_CONFIG.kneeBentMax) {
+    return { status: "wrong-pose", message: "Tekuk kedua lutut mendekati 90 derajat dan pertahankan kaki di lantai.", visibleLandmarks: 5, cameraMode: "side" };
+  }
+  return { status: "ready", message: "Posisi telentang terbaca. Tahan sebentar untuk mulai otomatis.", visibleLandmarks: 5, cameraMode: "side" };
+}
+
+function checkHangingReadiness(
+  landmarks: NormalizedLandmark[],
+  exerciseSlug: "pull-up" | "chinning-up",
+): ReadinessResult {
+  const kinematics = readPullUpKinematics(landmarks, { minConfidence: MIN_CONFIDENCE });
+  if (!kinematics.trackingValid) {
+    return {
+      status: "side-cut",
+      message: "Pastikan wajah, kedua tangan, siku, bahu, pinggul, dan kaki terlihat penuh dari depan.",
+      visibleLandmarks: visibleCount(landmarks),
+      cameraMode: "front",
+    };
+  }
+  const extent = poseExtent(landmarks, [
+    POSE_LANDMARKS.MOUTH_LEFT, POSE_LANDMARKS.MOUTH_RIGHT,
+    POSE_LANDMARKS.LEFT_WRIST, POSE_LANDMARKS.RIGHT_WRIST,
+    POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE,
+  ]);
+  if (extent < 0.4) {
+    return { status: "too-far", message: "Tubuh terlalu kecil. Dekatkan kamera sampai posisi dagu dan tangan terlihat jelas.", visibleLandmarks: 12, cameraMode: "front" };
+  }
+  if (exerciseSlug === "pull-up") {
+    if (kinematics.handsHeightRatio < PULL_UP_DEFAULT_CONFIG.handsAboveShoulderMinRatio
+      || kinematics.averageElbowAngle < PULL_UP_DEFAULT_CONFIG.elbowHangMin) {
+      return { status: "wrong-pose", message: "Mulai menggantung dengan kedua tangan di atas bahu dan siku lurus.", visibleLandmarks: 12, cameraMode: "front" };
+    }
+    return { status: "ready", message: "Posisi gantung lengan lurus terbaca. Tahan sebentar untuk mulai otomatis.", visibleLandmarks: 12, cameraMode: "front" };
+  }
+  if (kinematics.averageElbowAngle > CHINNING_UP_DEFAULT_CONFIG.elbowHoldMax
+    || kinematics.chinClearanceRatio < CHINNING_UP_DEFAULT_CONFIG.chinAboveHandsMarginRatio) {
+    return { status: "wrong-pose", message: "Ambil posisi siku tekuk dan letakkan dagu di atas palang untuk memulai timer.", visibleLandmarks: 12, cameraMode: "front" };
+  }
+  return { status: "ready", message: "Posisi chinning-up valid. Tahan sebentar untuk memulai timer.", visibleLandmarks: 12, cameraMode: "front" };
+}
+
+function visibleCount(landmarks: NormalizedLandmark[]): number {
+  return landmarks.filter((landmark) => landmark.visibility >= MIN_CONFIDENCE).length;
+}
+
+function poseExtent(landmarks: NormalizedLandmark[], indices: number[]): number {
+  const points = indices.flatMap((index) => {
+    const point = landmarks[index];
+    return point && point.visibility >= MIN_CONFIDENCE ? [point] : [];
+  });
+  if (points.length === 0) return 0;
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
 }
 
 function checkPushUpReadiness(

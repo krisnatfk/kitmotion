@@ -167,12 +167,12 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
       setReadiness({
         status: "no-body",
         message: phase === "active" || phase === "paused"
-          ? "Kamera siap. Kembali ke posisi plank atas untuk melanjutkan."
+          ? getResumePositionMessage(exerciseSlug)
           : "Kamera siap. Ambil kembali posisi awal latihan.",
         visibleLandmarks: 0,
       });
     });
-  }, [camera, orientation, phase, session]);
+  }, [camera, exerciseSlug, orientation, phase, session]);
 
   useEffect(() => {
     if (
@@ -335,7 +335,7 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
           <div className="rounded-sm border border-white/10 bg-white/[0.04] px-xl py-lg"><p className="text-xs uppercase tracking-widest text-white/45">Grade</p><p className="mt-xs font-display text-5xl">{result.grade}</p></div>
         </div>
       </section>
-      <div className="mt-lg grid grid-cols-2 gap-sm tablet-narrow:grid-cols-4"><ResultStat label="XP didapat" value={`+${result.xpAwarded}`} /><ResultStat label="Level" value={String(result.newLevel || "—")} /><ResultStat label="Repetisi valid" value={String(session.live.validReps)} /><ResultStat label="Total repetisi" value={String(session.live.repCount)} /></div>
+      <div className="mt-lg grid grid-cols-2 gap-sm tablet-narrow:grid-cols-4"><ResultStat label="XP didapat" value={`+${result.xpAwarded}`} /><ResultStat label="Level" value={String(result.newLevel || "—")} />{targetSeconds ? <ResultStat label="Durasi valid" value={`${Math.floor(session.live.validDurationMs / 1000)} detik`} /> : <ResultStat label="Repetisi valid" value={String(session.live.validReps)} />}{targetSeconds ? <ResultStat label="Target tahan" value={`${targetSeconds} detik`} /> : <ResultStat label="Total repetisi" value={String(session.live.repCount)} />}</div>
       {result.newBadges.length > 0 && <ResultList title="Badge baru" items={result.newBadges.map((badge) => ({ key: badge.code, label: `🏅 ${badge.name}` }))} />}
       {result.challengesCompleted.length > 0 && <ResultList title="Challenge selesai" items={result.challengesCompleted.map((challenge) => ({ key: challenge.code, label: `🎯 ${challenge.title}` }))} />}
       {result.milestone && <div className={`mt-lg rounded-sm p-lg text-sm ${result.milestone.success ? "bg-[#eaf7ee] text-success" : "bg-[#fff7df] text-charcoal"}`}><strong>{result.milestone.success ? "Milestone berhasil" : "Milestone belum berhasil"}</strong><p className="mt-xs">{result.milestone.message}</p></div>}
@@ -451,8 +451,8 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
             </p>
           </div>
           <div className="mt-lg grid grid-cols-2 gap-sm">
-            <DarkStat label="Valid tersimpan" value={String(session.live.validReps)} />
-            <DarkStat label="Total tersimpan" value={String(session.live.repCount)} />
+            {targetSeconds ? <DarkStat label="Tahan valid" value={`${Math.floor(session.live.validDurationMs / 1000)}s`} /> : <DarkStat label="Valid tersimpan" value={String(session.live.validReps)} />}
+            {targetSeconds ? <DarkStat label="Target" value={`${targetSeconds}s`} /> : <DarkStat label="Total tersimpan" value={String(session.live.repCount)} />}
           </div>
         </> : phase !== "active" ? <>
           <p className="text-xs font-bold uppercase tracking-widest text-white/40">Status kesiapan</p>
@@ -470,7 +470,7 @@ export function WorkoutRunner({ exerciseSlug, exerciseName, cameraPosition, engi
           <p className="mt-md text-center text-[10px] leading-relaxed text-white/35">Tidak perlu menyentuh layar saat posisi sudah tepat.</p>
         </> : <>
           <p className="eyebrow text-sport-lime">Sesi berlangsung</p>
-          <div className="mt-lg"><LiveHud repCount={session.live.repCount} validReps={session.live.validReps} elapsedMs={session.live.elapsedMs} trackingValid={session.live.trackingValid} feedback={session.live.feedback} liveMetric={session.live.liveMetric} diagnostics={session.live.diagnostics} phase={session.live.phase} targetReps={targetReps} /></div>
+          <div className="mt-lg"><LiveHud repCount={session.live.repCount} validReps={session.live.validReps} elapsedMs={session.live.elapsedMs} validDurationMs={session.live.validDurationMs} trackingValid={session.live.trackingValid} feedback={session.live.feedback} liveMetric={session.live.liveMetric} diagnostics={session.live.diagnostics} phase={session.live.phase} targetReps={targetReps} targetSeconds={targetSeconds} /></div>
           <Button onClick={finishSession} disabled={finalizing} className="mt-xl w-full bg-sport-lime text-sport-black hover:bg-white">{finalizing ? "Menyimpan…" : "Selesaikan sesi"}</Button>
         </>}
         {error && <p className="mt-lg rounded-sm bg-danger/15 p-md text-xs text-[#ff9c9c]" role="alert">{error}</p>}
@@ -592,6 +592,14 @@ function getCameraGuidance(
     }
     return "Kamera depan portrait aktif. Pastikan kedua tangan, bahu, dan pinggul terlihat.";
   }
+  if (exerciseSlug === "sit-up") {
+    return orientation === "landscape"
+      ? "Posisikan kamera di samping matras agar kepala sampai kaki terlihat sepanjang gerakan."
+      : "Putar HP ke landscape dan letakkan di samping matras untuk membaca punggung serta lutut dengan akurat.";
+  }
+  if (exerciseSlug === "pull-up" || exerciseSlug === "chinning-up") {
+    return "Hadapkan kamera ke depan palang. Pastikan dagu, kedua tangan, siku, badan, dan kaki tidak terpotong.";
+  }
   if (orientation === "landscape") {
     return "Untuk gerakan berdiri, pastikan kepala sampai kaki tetap masuk meskipun layar landscape.";
   }
@@ -600,16 +608,26 @@ function getCameraGuidance(
     : "Kamera depan portrait aktif agar seluruh tinggi tubuh mudah dipantau.";
 }
 
+function getResumePositionMessage(exerciseSlug: string): string {
+  if (exerciseSlug === "push-up") return "Kamera siap. Kembali ke posisi plank atas untuk melanjutkan.";
+  if (exerciseSlug === "sit-up") return "Kamera siap. Kembali telentang dengan lutut ditekuk untuk melanjutkan.";
+  if (exerciseSlug === "pull-up") return "Kamera siap. Kembali ke posisi gantung dengan lengan lurus.";
+  if (exerciseSlug === "chinning-up") return "Kamera siap. Kembalikan dagu ke atas palang agar timer berjalan.";
+  return "Kamera siap. Kembali ke posisi awal latihan untuk melanjutkan.";
+}
+
 function LiveHud(props: {
   repCount: number;
   validReps: number;
   elapsedMs: number;
+  validDurationMs: number;
   trackingValid: boolean;
   feedback: { code: string; severity: string; message: string }[];
   liveMetric?: { label: string; value: number };
   diagnostics?: ExerciseFrameResult["diagnostics"];
   phase: string;
   targetReps: number | null;
+  targetSeconds: number | null;
 }) {
   const [coachMessage, setCoachMessage] = useState<{ code: string; severity: string; message: string } | null>(null);
   const actionable = props.feedback.find((item) => item.code !== "good");
@@ -640,8 +658,9 @@ function LiveHud(props: {
         {exercisePhaseLabel(props.phase)}
       </span>
     </div>
-    <div className="grid grid-cols-2 gap-sm"><DarkStat label="Valid" value={String(props.validReps)} /><DarkStat label="Perlu diperbaiki" value={String(invalidReps)} /><DarkStat label="Total" value={String(props.repCount)} /><DarkStat label="Waktu" value={time} /></div>
+    {props.targetSeconds ? <div className="grid grid-cols-2 gap-sm"><DarkStat label="Tahan valid" value={`${Math.floor(props.validDurationMs / 1000)}s`} /><DarkStat label="Target" value={`${props.targetSeconds}s`} /><DarkStat label="Waktu sesi" value={time} /><DarkStat label="Status" value={props.phase === "holding" ? "Valid" : "Atur"} /></div> : <div className="grid grid-cols-2 gap-sm"><DarkStat label="Valid" value={String(props.validReps)} /><DarkStat label="Perlu diperbaiki" value={String(invalidReps)} /><DarkStat label="Total" value={String(props.repCount)} /><DarkStat label="Waktu" value={time} /></div>}
     {props.targetReps && <div><div className="mt-lg flex justify-between text-xs text-white/50"><span>Target repetisi valid</span><span>{props.validReps}/{props.targetReps}</span></div><div className="mt-sm h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-sport-lime transition-[width] duration-300" style={{ width: `${Math.min(100, (props.validReps / props.targetReps) * 100)}%` }} /></div></div>}
+    {props.targetSeconds && <div><div className="mt-lg flex justify-between text-xs text-white/50"><span>Target durasi valid</span><span>{Math.floor(props.validDurationMs / 1000)}/{props.targetSeconds} detik</span></div><div className="mt-sm h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-sport-lime transition-[width] duration-300" style={{ width: `${Math.min(100, (props.validDurationMs / 1000 / props.targetSeconds) * 100)}%` }} /></div></div>}
     {!props.trackingValid ? <div className="rounded-sm border border-danger/40 bg-danger/15 p-md" role="alert"><p className="text-[10px] font-bold uppercase tracking-widest text-[#ff9c9c]">Pelacakan dijeda</p><p className="mt-xs text-xs leading-relaxed text-white/75">{props.diagnostics?.trackingMessage ?? "Tubuh tidak terbaca utuh. Kembali ke tengah frame agar penilaian dilanjutkan."}</p></div> : coachMessage ? <div className="animate-coach-alert rounded-sm border border-[#ff7657]/45 bg-[#ff7657]/15 p-md" role="alert" aria-live="assertive"><p className="text-[10px] font-bold uppercase tracking-widest text-[#ff9c82]">Koreksi sekarang</p><p className="mt-xs text-sm font-semibold leading-relaxed text-white">{coachMessage.message}</p></div> : <div className="rounded-sm border border-sport-lime/20 bg-sport-lime/10 p-md" aria-live="polite"><p className="text-[10px] font-bold uppercase tracking-widest text-sport-lime">Gerakan terbaca</p><p className="mt-xs text-xs text-white/65">Pertahankan posisi dan selesaikan rentang gerak.</p></div>}
     {props.diagnostics?.cameraMode === "front"
       && props.diagnostics.leftElbowAngle != null
@@ -668,6 +687,8 @@ function exercisePhaseLabel(phase: string): string {
     closing: "Menutup",
     closed: "Tertutup",
     complete: "Selesai",
+    holding: "Posisi valid",
+    adjust: "Perbaiki posisi",
   } as Record<string, string>)[phase] ?? phase;
 }
 

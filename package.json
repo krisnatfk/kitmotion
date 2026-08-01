@@ -29,6 +29,7 @@
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",
     "next": "^15.1.6",
+    "pdf-lib": "^1.17.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.2",

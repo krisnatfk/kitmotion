@@ -47,6 +47,10 @@ export async function finalizeSession(
   }
   const data = parsed.data;
 
+  if (data.validDurationSeconds > data.durationSeconds) {
+    return { error: "Durasi gerakan valid melebihi durasi sesi." };
+  }
+
   // Cross-check rep counts (server validation, FR-066).
   if (data.totalReps !== data.repetitions.length) {
     return { error: "Jumlah repetisi tidak konsisten." };
@@ -174,6 +178,7 @@ export async function finalizeSession(
         engine_key: version.engine_key,
         tracking_loss_count: data.trackingLossCount,
         milestone_level: data.milestoneLevel,
+        valid_duration_seconds: data.validDurationSeconds,
       },
     })
     .select("id")
@@ -239,6 +244,7 @@ export async function finalizeSession(
     finalScore: score.finalScore,
     validReps: data.validReps,
     durationSeconds: data.durationSeconds,
+    validDurationSeconds: data.validDurationSeconds,
     targetReps: data.targetReps,
     targetSeconds: data.targetSeconds,
     startedAt: null,

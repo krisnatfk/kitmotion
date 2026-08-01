@@ -6,6 +6,7 @@ const BASE_PAYLOAD = {
   clientSessionId: "550e8400-e29b-41d4-a716-446655440000",
   exerciseSlug: "squat",
   durationSeconds: 12,
+  validDurationSeconds: 12,
   targetReps: 15,
   targetSeconds: null,
   totalReps: 1,

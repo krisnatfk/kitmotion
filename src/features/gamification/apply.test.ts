@@ -101,6 +101,7 @@ const baseInput = {
   finalScore: 80,
   validReps: 10,
   durationSeconds: 60,
+  validDurationSeconds: 60,
   targetReps: 10,
   targetSeconds: null,
   startedAt: null,
@@ -154,6 +155,24 @@ describe("applySessionRewards idempotency", () => {
     expect(c.xpInserts).toHaveLength(0);
     expect(c.progressUpserts).toHaveLength(0);
     expect(c.challengeUpserts).toHaveLength(0);
+  });
+
+  it("uses form-valid hold time, not total session time, for a timed target", async () => {
+    const c = makeClient({
+      progress: progressZero,
+      levels: [{ level: 1, name: "Beginner", min_total_xp: 0 }],
+      badges: [],
+      challenges: [],
+    });
+    const result = await applySessionRewards(c.client as never, {
+      ...baseInput,
+      exerciseSlug: "chinning-up",
+      targetReps: null,
+      targetSeconds: 30,
+      durationSeconds: 60,
+      validDurationSeconds: 18,
+    });
+    expect(result.xpAwarded).toBe(36);
   });
 
   it("awards a badge when the criteria is met", async () => {

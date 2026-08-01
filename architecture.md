@@ -278,6 +278,9 @@ Aturan:
 - Squat.
 - Jumping jack.
 - Push-up.
+- Sit-up.
+- Pull-up.
+- Chinning-up timed hold.
 - State machine.
 - Metrics.
 - Feedback.

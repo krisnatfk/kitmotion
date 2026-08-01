@@ -98,7 +98,7 @@ src/
 │  ├─ profile/               # queries + form
 │  ├─ exercises/             # queries (catalog)
 │  ├─ pose/                  # camera, MediaPipe loader, readiness, overlay
-│  ├─ exercise-engine/       # core (types/angles/landmarks) + squat/jumping-jack/push-up
+│  ├─ exercise-engine/       # core + squat/jumping-jack/push-up/sit-up/pull-up/chinning-up
 │  ├─ workout-session/       # session controller, schema, finalize action, runner UI
 │  ├─ scoring/               # weighted score + grade (server-authoritative)
 │  ├─ gamification/          # XP, level, badge, challenge (idempotent)
@@ -109,7 +109,7 @@ src/
 ├─ lib/                      # utils, env, supabase clients
 ├─ types/                    # database.types.ts
 supabase/
-├─ migrations/               # 0001_init s.d. 0008_learning_platform
+├─ migrations/               # versioned schema, policy, scoring, dan exercise seed
 └─ config.toml
 docs/iot-integration-contract.md
 ```
