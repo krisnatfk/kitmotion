@@ -1,4 +1,4 @@
-# Status Implementasi PRD KITMOTION v2.0
+# Status Implementasi PRD KITMOTION v3.0
 
 Audit ini mencocokkan `prd.md` dengan implementasi aplikasi saat ini.
 
@@ -16,6 +16,8 @@ Audit ini mencocokkan `prd.md` dengan implementasi aplikasi saat ini.
 | Kelas dan persetujuan | Terimplementasi | Guru membuat kelas/kode; siswa melihat identitas guru/kelas dan menyetujui; keluar/dikeluarkan mencabut akses laporan berikutnya. |
 | Dashboard dan laporan guru | Terimplementasi | Filter siswa, latihan, tanggal/rentang; total sesi/hasil valid, skor, durasi, level, XP, challenge, tren mingguan, kesalahan umum, serta export PDF profesional sesuai filter aktif. |
 | Riwayat | Terimplementasi | Daftar, filter latihan, detail sesi, repetisi, feedback, sub-score, dan tren sederhana dengan RLS. |
+| Lari GPS | Terimplementasi | Tracker aktif/jeda/lanjut, filter noise, peta, jarak, pace, split, elevasi, estimasi kalori, penyimpanan rute, dan XP idempoten. |
+| AI coach | Terimplementasi opsional | Session coach, rekomendasi harian, insight kelas, output terstruktur, cache, fallback deterministik, provider failover, dan kredensial terenkripsi server-side. |
 | Admin minimum | Terimplementasi | CRUD latihan/config, badge, challenge, daftar sesi, server-side admin guard, dan audit log. |
 | PWA | Terimplementasi | Manifest, service-worker registration, icon 512×512, metadata, dan standalone display. |
 | UI states | Terimplementasi | Loading, empty, success, form error, global error, not-found, dan disabled/submitting state. |

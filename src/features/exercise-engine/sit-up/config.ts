@@ -17,12 +17,12 @@ export interface SitUpConfig {
 }
 
 export const SIT_UP_DEFAULT_CONFIG: SitUpConfig = {
-  hipDownMin: 145,
-  hipTopMax: 75,
-  chestKneeMaxRatio: 0.72,
-  backStraightMin: 150,
-  kneeBentMin: 65,
-  kneeBentMax: 115,
+  hipDownMin: 120,
+  hipTopMax: 90,
+  chestKneeMaxRatio: 0.85,
+  backStraightMin: 130,
+  kneeBentMin: 45,
+  kneeBentMax: 135,
   debounceFrames: 3,
   minConfidence: 0.5,
   tempoFastMs: 500,

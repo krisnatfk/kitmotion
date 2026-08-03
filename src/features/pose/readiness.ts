@@ -118,14 +118,17 @@ function checkSitUpReadiness(landmarks: NormalizedLandmark[]): ReadinessResult {
     POSE_LANDMARKS.LEFT_KNEE, POSE_LANDMARKS.RIGHT_KNEE,
     POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE,
   ]);
-  if (extent < 0.38) {
+  if (extent < 0.30) {
     return { status: "too-far", message: "Tubuh terlalu kecil. Dekatkan kamera tanpa memotong kepala atau kaki.", visibleLandmarks: visibleCount(landmarks), cameraMode: "side" };
   }
-  if (kinematics.hipAngle < SIT_UP_DEFAULT_CONFIG.hipDownMin) {
+  // Use a generous tolerance (15°) on top of the already-relaxed config
+  // so that natural body variation doesn't block readiness.
+  if (kinematics.hipAngle < SIT_UP_DEFAULT_CONFIG.hipDownMin - 15) {
     return { status: "wrong-pose", message: "Mulai telentang dengan punggung lurus di matras.", visibleLandmarks: 5, cameraMode: "side" };
   }
-  if (kinematics.kneeAngle < SIT_UP_DEFAULT_CONFIG.kneeBentMin || kinematics.kneeAngle > SIT_UP_DEFAULT_CONFIG.kneeBentMax) {
-    return { status: "wrong-pose", message: "Tekuk kedua lutut mendekati 90 derajat dan pertahankan kaki di lantai.", visibleLandmarks: 5, cameraMode: "side" };
+  // Widen knee-angle tolerance by 15° on each side for readiness
+  if (kinematics.kneeAngle < SIT_UP_DEFAULT_CONFIG.kneeBentMin - 15 || kinematics.kneeAngle > SIT_UP_DEFAULT_CONFIG.kneeBentMax + 15) {
+    return { status: "wrong-pose", message: "Tekuk kedua lutut dan pertahankan kaki di lantai.", visibleLandmarks: 5, cameraMode: "side" };
   }
   return { status: "ready", message: "Posisi telentang terbaca. Tahan sebentar untuk mulai otomatis.", visibleLandmarks: 5, cameraMode: "side" };
 }
@@ -148,19 +151,25 @@ function checkHangingReadiness(
     POSE_LANDMARKS.LEFT_WRIST, POSE_LANDMARKS.RIGHT_WRIST,
     POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE,
   ]);
-  if (extent < 0.4) {
+  if (extent < 0.30) {
     return { status: "too-far", message: "Tubuh terlalu kecil. Dekatkan kamera sampai posisi dagu dan tangan terlihat jelas.", visibleLandmarks: 12, cameraMode: "front" };
   }
   if (exerciseSlug === "pull-up") {
-    if (kinematics.handsHeightRatio < PULL_UP_DEFAULT_CONFIG.handsAboveShoulderMinRatio
-      || kinematics.averageElbowAngle < PULL_UP_DEFAULT_CONFIG.elbowHangMin) {
-      return { status: "wrong-pose", message: "Mulai menggantung dengan kedua tangan di atas bahu dan siku lurus.", visibleLandmarks: 12, cameraMode: "front" };
+    // Use modest tolerance: elbows should be mostly straight in the hang.
+    // The config already lowered elbowHangMin from 155→140, so adding -3
+    // means we accept down to 137° which accommodates natural elbow flex
+    // while still rejecting someone mid-pull (~135°).
+    if (kinematics.handsHeightRatio < PULL_UP_DEFAULT_CONFIG.handsAboveShoulderMinRatio - 0.05
+      || kinematics.averageElbowAngle < PULL_UP_DEFAULT_CONFIG.elbowHangMin - 3) {
+      return { status: "wrong-pose", message: "Mulai menggantung dengan kedua tangan di atas bahu dan siku mendekati lurus.", visibleLandmarks: 12, cameraMode: "front" };
     }
     return { status: "ready", message: "Posisi gantung lengan lurus terbaca. Tahan sebentar untuk mulai otomatis.", visibleLandmarks: 12, cameraMode: "front" };
   }
-  if (kinematics.averageElbowAngle > CHINNING_UP_DEFAULT_CONFIG.elbowHoldMax
-    || kinematics.chinClearanceRatio < CHINNING_UP_DEFAULT_CONFIG.chinAboveHandsMarginRatio) {
-    return { status: "wrong-pose", message: "Ambil posisi siku tekuk dan letakkan dagu di atas palang untuk memulai timer.", visibleLandmarks: 12, cameraMode: "front" };
+  // Chinning-up: add tolerances for elbow and chin position.
+  // People naturally fluctuate ±10° at the hold and chin can dip slightly.
+  if (kinematics.averageElbowAngle > CHINNING_UP_DEFAULT_CONFIG.elbowHoldMax + 10
+    || kinematics.chinClearanceRatio < CHINNING_UP_DEFAULT_CONFIG.chinAboveHandsMarginRatio - 0.05) {
+    return { status: "wrong-pose", message: "Ambil posisi siku tekuk dan letakkan dagu di atas atau dekat palang untuk memulai timer.", visibleLandmarks: 12, cameraMode: "front" };
   }
   return { status: "ready", message: "Posisi chinning-up valid. Tahan sebentar untuk memulai timer.", visibleLandmarks: 12, cameraMode: "front" };
 }

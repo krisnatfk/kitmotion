@@ -4,6 +4,8 @@ Aplikasi pembelajaran olahraga berbasis web (PWA) untuk siswa dan guru. Kamera +
 
 > **Status IoT:** Future-ready, **tidak aktif**. Tidak ada perangkat/pairing/telemetri/endpoint IoT. Lihat [docs/iot-integration-contract.md](docs/iot-integration-contract.md).
 
+Dokumentasi arsitektur, alur kerja, server, database, keamanan, deployment, dan bahan presentasi tersedia di [docs/dokumentasi-teknis-kitmotion.md](docs/dokumentasi-teknis-kitmotion.md). Kebutuhan produk terbaru tersedia di [prd.md](prd.md).
+
 ---
 
 ## Stack

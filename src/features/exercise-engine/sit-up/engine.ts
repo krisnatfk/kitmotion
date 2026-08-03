@@ -145,9 +145,11 @@ export class SitUpEngine implements ExerciseEngine {
   }
 
   private advance(kinematics: SitUpKinematics, timestampMs: number): void {
-    const isDown = kinematics.hipAngle >= this.config.hipDownMin;
-    const isTop = kinematics.hipAngle <= this.config.hipTopMax
-      && kinematics.chestKneeRatio <= this.config.chestKneeMaxRatio;
+    const hysteresisDown = this.phase === "down" ? 0 : 10;
+    const hysteresisTop = this.phase === "top" ? 5 : 0;
+    const isDown = kinematics.hipAngle >= this.config.hipDownMin - hysteresisDown;
+    const isTop = kinematics.hipAngle <= this.config.hipTopMax + hysteresisTop
+      && kinematics.chestKneeRatio <= this.config.chestKneeMaxRatio * 1.15;
     let target = this.phase;
     if (this.phase === "down" && !isDown) target = "rising";
     else if (this.phase === "rising" && isTop) target = "top";

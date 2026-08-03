@@ -138,10 +138,11 @@ export class PullUpEngine implements ExerciseEngine {
   }
 
   private advance(kinematics: PullUpKinematics, timestampMs: number): void {
+    const topHysteresis = this.phase === "top" ? 5 : 0;
     const isHanging = kinematics.averageElbowAngle >= this.config.elbowHangMin
       && kinematics.handsHeightRatio >= this.config.handsAboveShoulderMinRatio;
-    const isTop = kinematics.averageElbowAngle <= this.config.elbowTopMax
-      && kinematics.chinClearanceRatio >= this.config.chinAboveHandsMarginRatio;
+    const isTop = kinematics.averageElbowAngle <= this.config.elbowTopMax + topHysteresis
+      && kinematics.chinClearanceRatio >= this.config.chinAboveHandsMarginRatio - 0.03;
     let target = this.phase;
     if (this.phase === "down" && !isHanging) target = "ascending";
     else if (this.phase === "ascending" && isTop) target = "top";

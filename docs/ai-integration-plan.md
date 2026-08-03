@@ -1,4 +1,4 @@
-# Rencana Integrasi AI KITMOTION
+# Arsitektur Integrasi AI KITMOTION
 
 ## Keputusan arsitektur
 
@@ -10,7 +10,7 @@ KITMOTION menggunakan dua lapisan AI dengan tanggung jawab yang berbeda:
    - Scoring tetap deterministik dan dapat diuji; model bahasa tidak menentukan skor.
    - Video dan frame tidak dikirim ke server.
 
-2. **AI coach generatif di server (fase lanjutan)**
+2. **AI coach generatif opsional di server (terimplementasi)**
    - Model bahasa menerima ringkasan terstruktur setelah sesi, misalnya jenis latihan,
      skor komponen, tempo, jumlah repetisi valid, dan kode feedback.
    - Model menghasilkan penjelasan yang lebih natural, rangkuman progres, dan saran
@@ -64,14 +64,13 @@ Untuk Ollama atau LM Studio lokal, `AI_API_KEY` boleh kosong dan `AI_BASE_URL` d
 menggunakan HTTP pada `localhost`. Provider dengan format API yang tidak kompatibel
 memerlukan adapter tersendiri, tetapi tetap memakai kontrak konfigurasi server yang sama.
 
-## Tahapan implementasi
+## Status dan penguatan berikutnya
 
-1. Stabilkan database, kamera, engine, scoring, dan evaluasi tiga gerakan MVP.
-2. Kumpulkan hasil pengujian berizin untuk kalibrasi threshold dan buat eval regresi.
-3. Tambahkan endpoint server untuk AI coach dengan input JSON terstruktur.
-4. Terapkan validasi output, batas biaya, rate limit, timeout, dan fallback statis.
-5. Uji kualitas feedback sebelum ditampilkan sebagai rekomendasi personal.
-6. Pertimbangkan fine-tuning hanya jika hasil eval menunjukkan kebutuhan nyata.
+1. Computer vision, enam engine, scoring, session coach, rekomendasi harian, insight kelas, cache, fallback, dan provider failover sudah terimplementasi.
+2. Kumpulkan hasil pengujian berizin untuk kalibrasi threshold dan eval regresi.
+3. Tambahkan rate limit dan observability biaya/latensi pada deployment produksi.
+4. Uji kualitas feedback secara berkala sebelum mengubah prompt atau model.
+5. Pertimbangkan fine-tuning hanya jika hasil eval menunjukkan kebutuhan nyata.
 
 ## Batas keselamatan dan privasi
 

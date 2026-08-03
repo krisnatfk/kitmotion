@@ -13,10 +13,10 @@ export interface ChinningUpConfig {
 }
 
 export const CHINNING_UP_DEFAULT_CONFIG: ChinningUpConfig = {
-  elbowHoldMax: 105,
-  chinAboveHandsMarginRatio: 0,
-  elbowSymmetryMaxDelta: 20,
-  bodySwingMaxRatio: 0.25,
+  elbowHoldMax: 120,
+  chinAboveHandsMarginRatio: -0.05,
+  elbowSymmetryMaxDelta: 30,
+  bodySwingMaxRatio: 0.35,
   minConfidence: 0.5,
   maximumFrameGapMs: 250,
 };

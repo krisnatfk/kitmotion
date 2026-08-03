@@ -17,12 +17,12 @@ export interface PullUpConfig {
 }
 
 export const PULL_UP_DEFAULT_CONFIG: PullUpConfig = {
-  elbowHangMin: 155,
-  elbowTopMax: 105,
-  chinAboveHandsMarginRatio: 0,
-  handsAboveShoulderMinRatio: 0.45,
-  elbowSymmetryMaxDelta: 20,
-  bodySwingMaxRatio: 0.28,
+  elbowHangMin: 140,
+  elbowTopMax: 120,
+  chinAboveHandsMarginRatio: -0.05,
+  handsAboveShoulderMinRatio: 0.30,
+  elbowSymmetryMaxDelta: 30,
+  bodySwingMaxRatio: 0.35,
   debounceFrames: 3,
   minConfidence: 0.5,
   tempoFastMs: 500,
