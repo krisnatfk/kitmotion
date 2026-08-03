@@ -106,28 +106,23 @@ function checkSitUpReadiness(landmarks: NormalizedLandmark[]): ReadinessResult {
   if (!kinematics.trackingValid) {
     return {
       status: "side-cut",
-      message: "Hadapkan tubuh ke samping kamera. Pastikan kepala, bahu, pinggul, lutut, dan kaki terlihat.",
+      message: "Hadapkan tubuh ke samping kamera. Pastikan kepala, bahu, pinggul, dan lutut terlihat.",
       visibleLandmarks: visibleCount(landmarks),
       cameraMode: "side",
     };
   }
   const extent = poseExtent(landmarks, [
-    POSE_LANDMARKS.LEFT_EAR, POSE_LANDMARKS.RIGHT_EAR,
     POSE_LANDMARKS.LEFT_SHOULDER, POSE_LANDMARKS.RIGHT_SHOULDER,
     POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP,
     POSE_LANDMARKS.LEFT_KNEE, POSE_LANDMARKS.RIGHT_KNEE,
-    POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE,
   ]);
-  if (extent < 0.30) {
+  if (extent < 0.20) {
     return { status: "too-far", message: "Tubuh terlalu kecil. Dekatkan kamera tanpa memotong kepala atau kaki.", visibleLandmarks: visibleCount(landmarks), cameraMode: "side" };
   }
-  // Use a generous tolerance (15°) on top of the already-relaxed config
-  // so that natural body variation doesn't block readiness.
-  if (kinematics.hipAngle < SIT_UP_DEFAULT_CONFIG.hipDownMin - 15) {
+  if (kinematics.hipAngle < SIT_UP_DEFAULT_CONFIG.hipDownMin - 10) {
     return { status: "wrong-pose", message: "Mulai telentang dengan punggung lurus di matras.", visibleLandmarks: 5, cameraMode: "side" };
   }
-  // Widen knee-angle tolerance by 15° on each side for readiness
-  if (kinematics.kneeAngle < SIT_UP_DEFAULT_CONFIG.kneeBentMin - 15 || kinematics.kneeAngle > SIT_UP_DEFAULT_CONFIG.kneeBentMax + 15) {
+  if (kinematics.kneeAngle < SIT_UP_DEFAULT_CONFIG.kneeBentMin - 10 || kinematics.kneeAngle > SIT_UP_DEFAULT_CONFIG.kneeBentMax + 10) {
     return { status: "wrong-pose", message: "Tekuk kedua lutut dan pertahankan kaki di lantai.", visibleLandmarks: 5, cameraMode: "side" };
   }
   return { status: "ready", message: "Posisi telentang terbaca. Tahan sebentar untuk mulai otomatis.", visibleLandmarks: 5, cameraMode: "side" };

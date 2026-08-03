@@ -148,8 +148,9 @@ export class SitUpEngine implements ExerciseEngine {
     const hysteresisDown = this.phase === "down" ? 0 : 10;
     const hysteresisTop = this.phase === "top" ? 5 : 0;
     const isDown = kinematics.hipAngle >= this.config.hipDownMin - hysteresisDown;
-    const isTop = kinematics.hipAngle <= this.config.hipTopMax + hysteresisTop
-      && kinematics.chestKneeRatio <= this.config.chestKneeMaxRatio * 1.15;
+    const isTop = (kinematics.hipAngle <= this.config.hipTopMax + hysteresisTop
+      && kinematics.chestKneeRatio <= this.config.chestKneeMaxRatio * 1.15)
+      || kinematics.chestKneeRatio <= 0.65;
     let target = this.phase;
     if (this.phase === "down" && !isDown) target = "rising";
     else if (this.phase === "rising" && isTop) target = "top";
@@ -267,23 +268,57 @@ export function readSitUpKinematics(
   landmarks: NormalizedLandmark[],
   config: SitUpConfig,
 ): SitUpKinematics {
-  const sides = [
-    { ear: POSE_LANDMARKS.LEFT_EAR, shoulder: POSE_LANDMARKS.LEFT_SHOULDER, hip: POSE_LANDMARKS.LEFT_HIP, knee: POSE_LANDMARKS.LEFT_KNEE, ankle: POSE_LANDMARKS.LEFT_ANKLE },
-    { ear: POSE_LANDMARKS.RIGHT_EAR, shoulder: POSE_LANDMARKS.RIGHT_SHOULDER, hip: POSE_LANDMARKS.RIGHT_HIP, knee: POSE_LANDMARKS.RIGHT_KNEE, ankle: POSE_LANDMARKS.RIGHT_ANKLE },
-  ];
-  const side = sides.find((candidate) => Object.values(candidate).every((index) => isVisible(landmarks[index], config.minConfidence)));
-  if (!side) return { trackingValid: false, hipAngle: 0, kneeAngle: 0, backAngle: 0, chestKneeRatio: Infinity };
-  const ear = landmarks[side.ear]!;
-  const shoulder = landmarks[side.shoulder]!;
-  const hip = landmarks[side.hip]!;
-  const knee = landmarks[side.knee]!;
-  const ankle = landmarks[side.ankle]!;
+  const minConf = Math.min(config.minConfidence ?? 0.35, 0.35);
+
+  const leftScore = (landmarks[POSE_LANDMARKS.LEFT_SHOULDER]?.visibility ?? 0) +
+                    (landmarks[POSE_LANDMARKS.LEFT_HIP]?.visibility ?? 0) +
+                    (landmarks[POSE_LANDMARKS.LEFT_KNEE]?.visibility ?? 0);
+  const rightScore = (landmarks[POSE_LANDMARKS.RIGHT_SHOULDER]?.visibility ?? 0) +
+                     (landmarks[POSE_LANDMARKS.RIGHT_HIP]?.visibility ?? 0) +
+                     (landmarks[POSE_LANDMARKS.RIGHT_KNEE]?.visibility ?? 0);
+
+  const isLeftBetter = leftScore >= rightScore;
+
+  const primarySide = isLeftBetter
+    ? { shoulder: POSE_LANDMARKS.LEFT_SHOULDER, hip: POSE_LANDMARKS.LEFT_HIP, knee: POSE_LANDMARKS.LEFT_KNEE, ear: POSE_LANDMARKS.LEFT_EAR, ankle: POSE_LANDMARKS.LEFT_ANKLE }
+    : { shoulder: POSE_LANDMARKS.RIGHT_SHOULDER, hip: POSE_LANDMARKS.RIGHT_HIP, knee: POSE_LANDMARKS.RIGHT_KNEE, ear: POSE_LANDMARKS.RIGHT_EAR, ankle: POSE_LANDMARKS.RIGHT_ANKLE };
+
+  const fallbackSide = isLeftBetter
+    ? { shoulder: POSE_LANDMARKS.RIGHT_SHOULDER, hip: POSE_LANDMARKS.RIGHT_HIP, knee: POSE_LANDMARKS.RIGHT_KNEE, ear: POSE_LANDMARKS.RIGHT_EAR, ankle: POSE_LANDMARKS.RIGHT_ANKLE }
+    : { shoulder: POSE_LANDMARKS.LEFT_SHOULDER, hip: POSE_LANDMARKS.LEFT_HIP, knee: POSE_LANDMARKS.LEFT_KNEE, ear: POSE_LANDMARKS.LEFT_EAR, ankle: POSE_LANDMARKS.LEFT_ANKLE };
+
+  let shoulder = landmarks[primarySide.shoulder];
+  let hip = landmarks[primarySide.hip];
+  let knee = landmarks[primarySide.knee];
+
+  if (!isVisible(shoulder, minConf) || !isVisible(hip, minConf) || !isVisible(knee, minConf)) {
+    shoulder = landmarks[fallbackSide.shoulder];
+    hip = landmarks[fallbackSide.hip];
+    knee = landmarks[fallbackSide.knee];
+    if (!isVisible(shoulder, minConf) || !isVisible(hip, minConf) || !isVisible(knee, minConf)) {
+      return { trackingValid: false, hipAngle: 0, kneeAngle: 0, backAngle: 0, chestKneeRatio: Infinity };
+    }
+  }
+
+  let headPoint = landmarks[primarySide.ear];
+  if (!isVisible(headPoint, minConf)) headPoint = landmarks[fallbackSide.ear];
+  if (!isVisible(headPoint, minConf)) headPoint = landmarks[POSE_LANDMARKS.NOSE] ?? landmarks[POSE_LANDMARKS.LEFT_EYE_OUTER] ?? landmarks[POSE_LANDMARKS.RIGHT_EYE_OUTER];
+
+  let anklePoint = landmarks[primarySide.ankle];
+  if (!isVisible(anklePoint, minConf)) anklePoint = landmarks[fallbackSide.ankle];
+  if (!isVisible(anklePoint, minConf)) anklePoint = landmarks[POSE_LANDMARKS.LEFT_FOOT_INDEX] ?? landmarks[POSE_LANDMARKS.RIGHT_FOOT_INDEX];
+
   const torsoLength = Math.hypot(shoulder.x - hip.x, shoulder.y - hip.y) || 1;
+  const hipAngle = angleBetweenDegrees(shoulder, hip, knee);
+  const kneeAngle = isVisible(anklePoint, minConf) ? angleBetweenDegrees(hip, knee, anklePoint) : 90;
+  const backAngle = isVisible(headPoint, minConf) ? angleBetweenDegrees(headPoint, shoulder, hip) : 180;
+  const chestKneeRatio = Math.hypot(shoulder.x - knee.x, shoulder.y - knee.y) / torsoLength;
+
   return {
     trackingValid: true,
-    hipAngle: angleBetweenDegrees(shoulder, hip, knee),
-    kneeAngle: angleBetweenDegrees(hip, knee, ankle),
-    backAngle: angleBetweenDegrees(ear, shoulder, hip),
-    chestKneeRatio: Math.hypot(shoulder.x - knee.x, shoulder.y - knee.y) / torsoLength,
+    hipAngle,
+    kneeAngle,
+    backAngle,
+    chestKneeRatio,
   };
 }
